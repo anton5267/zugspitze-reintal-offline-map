@@ -1403,7 +1403,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     .descent-note.caution { border-left-color: #f59e0b; }
     .descent-note.blocked { border-left-color: #dc2626; background: #fff7ed; }
     .offline-status {
-      position: fixed; z-index: 9998; top: 10px; right: 10px; max-width: 360px;
+      position: fixed; z-index: 900; top: 10px; left: 50%; right: auto; transform: translateX(-50%);
+      max-width: min(430px, calc(100vw - 560px));
       box-sizing: border-box; padding: 7px 10px; border: 1px solid #334155; border-radius: 999px;
       background: rgba(255,255,255,.92); color: #111827; font: 700 12px Arial, sans-serif;
       box-shadow: 0 1px 7px rgba(0,0,0,.16);
@@ -1504,7 +1505,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       .leaflet-control-scale { display: none; }
       .leaflet-control-attribution { font-size: 9px; max-width: calc(100vw - 12px); }
       .coords-panel { display: none; }
-      .offline-status { display: none; top: auto; left: 8px; right: 8px; bottom: 150px; max-width: none; border-radius: 8px; }
+      .offline-status { display: none; top: auto; left: 8px; right: 8px; bottom: 150px; transform: none; max-width: none; border-radius: 8px; }
       body.is-offline .offline-status { display: block; }
       .download-row { grid-template-columns: 1fr; }
     }
