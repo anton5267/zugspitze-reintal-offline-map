@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+zugspitze_map_server.pid
+zugspitze_mobile_check.png
+zugspitze_desktop_check.png
+zugspitze_reintal_satellite_map_v2.html
