@@ -3074,6 +3074,169 @@
       "show_by_default": true
     }
   ],
+  "decision_points": [
+    {
+      "id": "D01",
+      "name": "Klammausgang: обхід",
+      "lat": 47.460017,
+      "lon": 11.123798,
+      "kind": "route_decision",
+      "priority": 1,
+      "source": "Partnachklamm / скрін користувача",
+      "url": "https://www.partnachklamm.de/de/Zeiten%20-%20Preise",
+      "note": "Не йти прямо в закритий червоний коридор; переходити на Partnachalm / Hoher Weg.",
+      "open_hint": "Ключова точка обходу.",
+      "show_by_default": true
+    },
+    {
+      "id": "D02",
+      "name": "Partnachalm: тримати Hoher Weg",
+      "lat": 47.4629,
+      "lon": 11.11887,
+      "kind": "route_decision",
+      "priority": 1,
+      "source": "OSM / маршрут обходу",
+      "url": "",
+      "note": "Після Partnachalm не зрізати прямо до Bockhütte; тримати зелений обхід лівіше/західніше закритої ділянки.",
+      "open_hint": "Контроль правильного обходу.",
+      "show_by_default": true
+    },
+    {
+      "id": "D03",
+      "name": "Bockhütte: контроль стану",
+      "lat": 47.418172,
+      "lon": 11.094303,
+      "kind": "route_decision",
+      "priority": 1,
+      "source": "OSM / маршрут",
+      "url": "https://xn--bockhtte-b6a.de/die-huette/",
+      "note": "Повернення в Reintal. Перевірити воду/час/стан ніг перед довгою долиною.",
+      "open_hint": "Їжа/напої без ночівлі.",
+      "show_by_default": true
+    },
+    {
+      "id": "D04",
+      "name": "Reintalangerhütte: рішення по темпу",
+      "lat": 47.405319,
+      "lon": 11.035681,
+      "kind": "route_decision",
+      "priority": 1,
+      "source": "DAV / маршрут",
+      "url": "https://www.alpenverein-muenchen-oberland.de/huetten/alpenvereinshuetten/reintalangerhuette",
+      "note": "Якщо пізно або сильна втома, це логічна точка зупинки/переоцінки плану.",
+      "open_hint": "Планова ночівля тільки з бронюванням.",
+      "show_by_default": true
+    },
+    {
+      "id": "D05",
+      "name": "Knorrhütte: останній великий контроль",
+      "lat": 47.410018,
+      "lon": 11.012785,
+      "kind": "route_decision",
+      "priority": 1,
+      "source": "DAV / маршрут",
+      "url": "https://www.alpenverein-muenchen-oberland.de/huetten/alpenvereinshuetten/knorrhuette",
+      "note": "Перед Zugspitzplatt перевірити погоду, воду, час і варіанти Bahn.",
+      "open_hint": "Вузол Reintal/Gatterl.",
+      "show_by_default": true
+    },
+    {
+      "id": "D06",
+      "name": "Sonnalpin: Bahn або фінал",
+      "lat": 47.413623,
+      "lon": 10.980062,
+      "kind": "critical_decision",
+      "priority": 1,
+      "source": "DAV / Zugspitze facilities",
+      "url": "https://zugspitze.de/en/Service-information/Facilities",
+      "note": "Якщо втома, туман, сніг, гроза або мало часу - обрати Bahn. Фінальний підйом не дотискати через его.",
+      "open_hint": "Перевірити останній рейс.",
+      "show_by_default": true
+    },
+    {
+      "id": "D07",
+      "name": "Zugspitze: спуск без ризику",
+      "lat": 47.421219,
+      "lon": 10.986307,
+      "kind": "descent_decision",
+      "priority": 1,
+      "source": "Маршрут / Zugspitze facilities",
+      "url": "https://zugspitze.de/en/Service-information/Facilities",
+      "note": "Після вершини найпростіший спуск - Bahn. Пішохідні червоні/технічні варіанти не планувати.",
+      "open_hint": "Обрати спуск у вкладці Спуск.",
+      "show_by_default": true
+    }
+  ],
+  "safety_links": [
+    {
+      "name": "Partnachklamm статус",
+      "url": "https://www.partnachklamm.de/de/Zeiten%20-%20Preise",
+      "note": "Перевірити відкриття клямму і закриття напрямку Bockhütte/Reintal у день виходу."
+    },
+    {
+      "name": "Zugspitze timetable / facilities",
+      "url": "https://zugspitze.de/en/Service-information/Facilities",
+      "note": "Перевірити Cable car, Gletscherbahn, cogwheel train і останні рейси вниз."
+    },
+    {
+      "name": "DAV Bergwetter",
+      "url": "https://www.alpenverein.de/bergwetter/alpen/allgauer-und-bayerische-alpen-west-osterreich-nord",
+      "note": "Гірська погода, грози, вітер, видимість і температура на висоті."
+    },
+    {
+      "name": "DWD Südbayern",
+      "url": "https://www.dwd.de/DE/wetter/vorhersage_aktuell/suedbayern/vhs_suedbay_node.html",
+      "note": "Офіційний прогноз DWD для південної Баварії, включно з температурою на Zugspitze."
+    },
+    {
+      "name": "Lawinenwarndienst Bayern",
+      "url": "https://lawinenwarndienst.bayern.de/",
+      "note": "Якщо є сніг/снігові поля, перевірити лавинну ситуацію навіть улітку після холодних періодів."
+    },
+    {
+      "name": "SOS EU ALP",
+      "url": "https://www.leitstelle.tirol/leistungen/soseualpapp/",
+      "note": "Корисний emergency app для Альп; 112 залишається головним номером."
+    }
+  ],
+  "pre_departure_checks": [
+    "Partnachklamm: перевірити, чи актуальний обхід через Partnachalm / Hoher Weg.",
+    "Погода: гроза, вітер, туман, температура на Zugspitzplatt/вершині.",
+    "Сніг/снігові поля: перевірити Lawinenwarndienst Bayern і свіжі умови.",
+    "Bahn: перевірити останні рейси Gletscherbahn, Cable car Zugspitze, Zugspitzbahn.",
+    "GPX: імпортувати основний GPX і спуски в Organic Maps / Mapy.cz / Garmin.",
+    "Офлайн-мапи: завантажити Bayern/Tirol у навігаторі до виходу.",
+    "Телефон: 100% заряд, павербанк, кабель, режим економії не має вбити GPS.",
+    "Вода: стартувати із запасом; природну воду фільтрувати/очищати.",
+    "Час: якщо біля Knorrhütte або Sonnalpin пізно, не дотискати маршрут.",
+    "SOS: 112, координати копіюються з popup/GPS, print.html зберегти або роздрукувати."
+  ],
+  "iphone_offline_steps": [
+    "Перед походом відкрити GitHub Pages і перевірити, що карта завантажилась.",
+    "У навігаторі обов'язково імпортувати GPX: HTML у Safari не замінює офлайн-навігацію.",
+    "В Organic Maps або Mapy.cz завантажити офлайн-мапи Bayern/Tirol.",
+    "Зберегти GPX/KML і print.html у Files / iCloud Drive, щоб мати резерв без Safari.",
+    "Дати Safari/навігатору доступ до Location; на маршруті перевірити GPS ще біля старту.",
+    "Не покладатися на онлайн-супутник без інтернету; default-шар карти - офлайн OSM-вектор."
+  ],
+  "sonnalpin_decision": {
+    "name": "Sonnalpin: точка рішення",
+    "lat": 47.413623,
+    "lon": 10.980062,
+    "go": [
+      "Є запас часу до останнього спуску Bahn.",
+      "Немає грози, туману, сильного вітру або різкого погіршення погоди.",
+      "Є сили, вода, теплий шар і нормальна видимість.",
+      "Фінальна Schutt/Schrofen ділянка суха або прогнозовано безпечна."
+    ],
+    "stop": [
+      "Втома, судоми, нестача води або темп сильно впав.",
+      "Туман на Zugspitzplatt, гроза, сильний вітер, мокрий камінь або снігові поля.",
+      "Немає запасу часу до останньої Bahn.",
+      "Є сумнів - обрати Gletscherbahn/Zugspitzbahn, не фінальний підйом."
+    ]
+  },
+  "public_map_url": "https://anton5267.github.io/zugspitze-reintal-offline-map/",
   "descent_options": [
     {
       "id": "descent_bahn_eibsee",

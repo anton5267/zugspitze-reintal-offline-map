@@ -12,6 +12,9 @@ Notes:
 - The satellite layer is optional and needs internet.
 - GPX/KML files are included for import into Organic Maps, Mapy.cz, Garmin, or another navigator.
 - Closed or technical descent routes are marked as "НЕ планувати" in the map.
+- `print.html` is an A4 emergency sheet with QR, SOS, key coordinates, decision points, and official pre-departure links.
+- The interactive map includes GPS locate, a pre-departure checklist, and a Sonnalpin decision panel.
+- For offline file use, download `zugspitze_offline_pack.zip`, extract it, and open `index.html`.
 
 Main files:
 
@@ -20,4 +23,6 @@ Main files:
 - `zugspitze_reintal_corrected_route.gpx` - main corrected route.
 - `zugspitze_descent_options.gpx` - descent options.
 - `zugspitze_descent_options.kml` - descent options for KML tools.
+- `print.html` - printable emergency sheet.
+- `zugspitze_offline_pack.zip` - offline pack with map, print sheet, GPX/KML, and local instructions.
 - `build_zugspitze_editable_map.py` - generator.

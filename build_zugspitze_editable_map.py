@@ -1,3 +1,4 @@
+import base64
 import heapq
 import html
 import json
@@ -6,6 +7,8 @@ import re
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 
@@ -15,6 +18,9 @@ SOURCE_KML = ROOT / "zugspitze_reintal_map_v2.kml"
 
 OUT_HTML = ROOT / "zugspitze_reintal_editable_map.html"
 OUT_INDEX = ROOT / "index.html"
+OUT_PRINT = ROOT / "print.html"
+OUT_OFFLINE_README = ROOT / "OFFLINE_README.txt"
+OUT_OFFLINE_ZIP = ROOT / "zugspitze_offline_pack.zip"
 OUT_JSON = ROOT / "zugspitze_reintal_editable_points.json"
 OUT_GPX = ROOT / "zugspitze_reintal_corrected_route.gpx"
 OUT_KML = ROOT / "zugspitze_reintal_corrected_map.kml"
@@ -27,6 +33,7 @@ LEAFLET_CSS_CACHE = ROOT / "leaflet_1_9_4.css"
 LEAFLET_JS_CACHE = ROOT / "leaflet_1_9_4.js"
 LEAFLET_CSS_URL = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
 LEAFLET_JS_URL = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
+PUBLIC_MAP_URL = "https://anton5267.github.io/zugspitze-reintal-offline-map/"
 
 
 KLAMMAUSGANG = (47.460017, 11.123798)
@@ -75,6 +82,173 @@ SOURCE_CHECKS = [
         "name": "Zugspitze facilities",
         "url": "https://zugspitze.de/en/Service-information/Facilities",
         "note": "Станом на перевірку: Cable car Zugspitze, cogwheel train і Gletscherbahn позначені відкритими; перед виходом перевірити ще раз.",
+    },
+]
+
+SAFETY_LINKS = [
+    {
+        "name": "Partnachklamm статус",
+        "url": "https://www.partnachklamm.de/de/Zeiten%20-%20Preise",
+        "note": "Перевірити відкриття клямму і закриття напрямку Bockhütte/Reintal у день виходу.",
+    },
+    {
+        "name": "Zugspitze timetable / facilities",
+        "url": "https://zugspitze.de/en/Service-information/Facilities",
+        "note": "Перевірити Cable car, Gletscherbahn, cogwheel train і останні рейси вниз.",
+    },
+    {
+        "name": "DAV Bergwetter",
+        "url": "https://www.alpenverein.de/bergwetter/alpen/allgauer-und-bayerische-alpen-west-osterreich-nord",
+        "note": "Гірська погода, грози, вітер, видимість і температура на висоті.",
+    },
+    {
+        "name": "DWD Südbayern",
+        "url": "https://www.dwd.de/DE/wetter/vorhersage_aktuell/suedbayern/vhs_suedbay_node.html",
+        "note": "Офіційний прогноз DWD для південної Баварії, включно з температурою на Zugspitze.",
+    },
+    {
+        "name": "Lawinenwarndienst Bayern",
+        "url": "https://lawinenwarndienst.bayern.de/",
+        "note": "Якщо є сніг/снігові поля, перевірити лавинну ситуацію навіть улітку після холодних періодів.",
+    },
+    {
+        "name": "SOS EU ALP",
+        "url": "https://www.leitstelle.tirol/leistungen/soseualpapp/",
+        "note": "Корисний emergency app для Альп; 112 залишається головним номером.",
+    },
+]
+
+PRE_DEPARTURE_CHECKS = [
+    "Partnachklamm: перевірити, чи актуальний обхід через Partnachalm / Hoher Weg.",
+    "Погода: гроза, вітер, туман, температура на Zugspitzplatt/вершині.",
+    "Сніг/снігові поля: перевірити Lawinenwarndienst Bayern і свіжі умови.",
+    "Bahn: перевірити останні рейси Gletscherbahn, Cable car Zugspitze, Zugspitzbahn.",
+    "GPX: імпортувати основний GPX і спуски в Organic Maps / Mapy.cz / Garmin.",
+    "Офлайн-мапи: завантажити Bayern/Tirol у навігаторі до виходу.",
+    "Телефон: 100% заряд, павербанк, кабель, режим економії не має вбити GPS.",
+    "Вода: стартувати із запасом; природну воду фільтрувати/очищати.",
+    "Час: якщо біля Knorrhütte або Sonnalpin пізно, не дотискати маршрут.",
+    "SOS: 112, координати копіюються з popup/GPS, print.html зберегти або роздрукувати.",
+]
+
+IPHONE_OFFLINE_STEPS = [
+    "Перед походом відкрити GitHub Pages і перевірити, що карта завантажилась.",
+    "У навігаторі обов'язково імпортувати GPX: HTML у Safari не замінює офлайн-навігацію.",
+    "В Organic Maps або Mapy.cz завантажити офлайн-мапи Bayern/Tirol.",
+    "Зберегти GPX/KML і print.html у Files / iCloud Drive, щоб мати резерв без Safari.",
+    "Дати Safari/навігатору доступ до Location; на маршруті перевірити GPS ще біля старту.",
+    "Не покладатися на онлайн-супутник без інтернету; default-шар карти - офлайн OSM-вектор.",
+]
+
+SONNALPIN_DECISION = {
+    "name": "Sonnalpin: точка рішення",
+    "lat": 47.413623,
+    "lon": 10.980062,
+    "go": [
+        "Є запас часу до останнього спуску Bahn.",
+        "Немає грози, туману, сильного вітру або різкого погіршення погоди.",
+        "Є сили, вода, теплий шар і нормальна видимість.",
+        "Фінальна Schutt/Schrofen ділянка суха або прогнозовано безпечна.",
+    ],
+    "stop": [
+        "Втома, судоми, нестача води або темп сильно впав.",
+        "Туман на Zugspitzplatt, гроза, сильний вітер, мокрий камінь або снігові поля.",
+        "Немає запасу часу до останньої Bahn.",
+        "Є сумнів - обрати Gletscherbahn/Zugspitzbahn, не фінальний підйом.",
+    ],
+}
+
+DECISION_POINTS = [
+    {
+        "id": "D01",
+        "name": "Klammausgang: обхід",
+        "lat": 47.460017,
+        "lon": 11.123798,
+        "kind": "route_decision",
+        "priority": 1,
+        "source": "Partnachklamm / скрін користувача",
+        "url": "https://www.partnachklamm.de/de/Zeiten%20-%20Preise",
+        "note": "Не йти прямо в закритий червоний коридор; переходити на Partnachalm / Hoher Weg.",
+        "open_hint": "Ключова точка обходу.",
+        "show_by_default": True,
+    },
+    {
+        "id": "D02",
+        "name": "Partnachalm: тримати Hoher Weg",
+        "lat": 47.462900,
+        "lon": 11.118870,
+        "kind": "route_decision",
+        "priority": 1,
+        "source": "OSM / маршрут обходу",
+        "url": "",
+        "note": "Після Partnachalm не зрізати прямо до Bockhütte; тримати зелений обхід лівіше/західніше закритої ділянки.",
+        "open_hint": "Контроль правильного обходу.",
+        "show_by_default": True,
+    },
+    {
+        "id": "D03",
+        "name": "Bockhütte: контроль стану",
+        "lat": 47.418172,
+        "lon": 11.094303,
+        "kind": "route_decision",
+        "priority": 1,
+        "source": "OSM / маршрут",
+        "url": "https://xn--bockhtte-b6a.de/die-huette/",
+        "note": "Повернення в Reintal. Перевірити воду/час/стан ніг перед довгою долиною.",
+        "open_hint": "Їжа/напої без ночівлі.",
+        "show_by_default": True,
+    },
+    {
+        "id": "D04",
+        "name": "Reintalangerhütte: рішення по темпу",
+        "lat": 47.405319,
+        "lon": 11.035681,
+        "kind": "route_decision",
+        "priority": 1,
+        "source": "DAV / маршрут",
+        "url": "https://www.alpenverein-muenchen-oberland.de/huetten/alpenvereinshuetten/reintalangerhuette",
+        "note": "Якщо пізно або сильна втома, це логічна точка зупинки/переоцінки плану.",
+        "open_hint": "Планова ночівля тільки з бронюванням.",
+        "show_by_default": True,
+    },
+    {
+        "id": "D05",
+        "name": "Knorrhütte: останній великий контроль",
+        "lat": 47.410018,
+        "lon": 11.012785,
+        "kind": "route_decision",
+        "priority": 1,
+        "source": "DAV / маршрут",
+        "url": "https://www.alpenverein-muenchen-oberland.de/huetten/alpenvereinshuetten/knorrhuette",
+        "note": "Перед Zugspitzplatt перевірити погоду, воду, час і варіанти Bahn.",
+        "open_hint": "Вузол Reintal/Gatterl.",
+        "show_by_default": True,
+    },
+    {
+        "id": "D06",
+        "name": "Sonnalpin: Bahn або фінал",
+        "lat": 47.413623,
+        "lon": 10.980062,
+        "kind": "critical_decision",
+        "priority": 1,
+        "source": "DAV / Zugspitze facilities",
+        "url": "https://zugspitze.de/en/Service-information/Facilities",
+        "note": "Якщо втома, туман, сніг, гроза або мало часу - обрати Bahn. Фінальний підйом не дотискати через его.",
+        "open_hint": "Перевірити останній рейс.",
+        "show_by_default": True,
+    },
+    {
+        "id": "D07",
+        "name": "Zugspitze: спуск без ризику",
+        "lat": 47.421219,
+        "lon": 10.986307,
+        "kind": "descent_decision",
+        "priority": 1,
+        "source": "Маршрут / Zugspitze facilities",
+        "url": "https://zugspitze.de/en/Service-information/Facilities",
+        "note": "Після вершини найпростіший спуск - Bahn. Пішохідні червоні/технічні варіанти не планувати.",
+        "open_hint": "Обрати спуск у вкладці Спуск.",
+        "show_by_default": True,
     },
 ]
 
@@ -1096,6 +1270,7 @@ def export_map_points():
         TRANSPORT,
         VIEWPOINTS,
         RISK_POINTS,
+        DECISION_POINTS,
         POI,
     ]
     points = []
@@ -1967,6 +2142,12 @@ def write_json(original_points, corrected_points, detour_points, detour_check_po
         "transport": TRANSPORT,
         "viewpoints": VIEWPOINTS,
         "risk_points": RISK_POINTS,
+        "decision_points": DECISION_POINTS,
+        "safety_links": SAFETY_LINKS,
+        "pre_departure_checks": PRE_DEPARTURE_CHECKS,
+        "iphone_offline_steps": IPHONE_OFFLINE_STEPS,
+        "sonnalpin_decision": SONNALPIN_DECISION,
+        "public_map_url": PUBLIC_MAP_URL,
         "descent_options": [
             {
                 **option,
@@ -1992,6 +2173,27 @@ def polyline_distance(points):
 
 def js_json(value):
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def html_items(items):
+    return "\n".join(f"        <li>{html.escape(str(item))}</li>" for item in items)
+
+
+def html_checks(items):
+    return "\n".join(
+        f'        <label class="check-item"><input type="checkbox"><span>{html.escape(str(item))}</span></label>'
+        for item in items
+    )
+
+
+def html_source_links(items):
+    lines = []
+    for item in items:
+        lines.append(
+            f'        <li><a href="{html.escape(item["url"])}" target="_blank" rel="noreferrer">'
+            f'{html.escape(item["name"])}</a> - {html.escape(item["note"])}</li>'
+        )
+    return "\n".join(lines)
 
 
 def cached_text_asset(path, url):
@@ -2133,9 +2335,14 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       left: 14px; bottom: 78px; display: none; width: min(390px, calc(100vw - 28px));
       border-color: #dc2626; background: rgba(255,247,237,.97);
     }}
+    .decision-panel {{
+      right: 14px; bottom: 78px; display: none; width: min(430px, calc(100vw - 28px));
+      border-color: #d97706; background: rgba(255,251,235,.98);
+    }}
     body.show-info-panel .panel-left,
     body.show-edit-panel .panel-right,
-    body.show-sos-panel .sos-panel {{ display: block; }}
+    body.show-sos-panel .sos-panel,
+    body.show-decision-panel .decision-panel {{ display: block; }}
     .panel-header {{ display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 5px; }}
     .panel-top .panel-header {{ justify-content: flex-start; align-items: center; }}
     .panel-close {{
@@ -2145,7 +2352,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     }}
     .copy-box {{ width: 100%; height: 94px; margin-top: 8px; font: 11px Consolas, monospace; }}
     .small-btn {{ margin-top: 6px; padding: 5px 8px; border: 1px solid #374151; background: #f8fafc; cursor: pointer; border-radius: 5px; }}
-    .info-tabs {{ display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; margin: 8px 0 10px; }}
+    .info-tabs {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin: 8px 0 10px; }}
     .info-tab {{
       min-height: 32px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; color: #111827;
       font: 700 11px Arial, sans-serif; cursor: pointer; padding: 0 4px;
@@ -2172,6 +2379,22 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     .descent-note.recommended {{ border-left-color: #0ea5e9; }}
     .descent-note.caution {{ border-left-color: #f59e0b; }}
     .descent-note.blocked {{ border-left-color: #dc2626; background: #fff7ed; }}
+    .check-grid {{ display: grid; grid-template-columns: 1fr; gap: 6px; margin: 8px 0; }}
+    .check-item {{
+      display: grid; grid-template-columns: 18px 1fr; gap: 7px; align-items: start;
+      padding: 6px 7px; border: 1px solid #e2e8f0; border-radius: 6px; background: rgba(248,250,252,.82);
+    }}
+    .check-item input {{ margin-top: 2px; }}
+    .action-row {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 8px 0; }}
+    .action-btn {{
+      min-height: 38px; border: 1px solid #334155; border-radius: 6px; background: #fff;
+      color: #111827; font: 700 12px Arial, sans-serif; cursor: pointer; padding: 5px 7px;
+    }}
+    .action-btn.warn {{ border-color: #d97706; color: #92400e; background: #fffbeb; }}
+    .action-btn.danger {{ border-color: #dc2626; color: #991b1b; background: #fff7ed; }}
+    .decision-box {{ border-left: 4px solid #d97706; background: #fffbeb; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }}
+    .decision-box ul {{ margin: 5px 0 0; padding-left: 17px; }}
+    .decision-box li {{ margin: 3px 0; }}
     .offline-status {{
       position: fixed; z-index: 900; top: 10px; left: 50%; right: auto; transform: translateX(-50%);
       max-width: min(430px, calc(100vw - 560px));
@@ -2200,6 +2423,18 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     .map-toggle-descent {{ left: 102px; width: 90px; }}
     .map-toggle-sos {{ left: 202px; width: 72px; color: #991b1b; border-color: #991b1b; }}
     .map-toggle-center {{ left: 284px; }}
+    .locate-toggle {{
+      position: fixed; z-index: 10000; right: 14px; bottom: 92px;
+      min-width: 66px; height: 42px; padding: 0 10px; border: 1px solid #1d4ed8;
+      border-radius: 999px; background: rgba(255,255,255,.96); color: #1d4ed8;
+      font: 800 13px Arial, sans-serif; box-shadow: 0 2px 10px rgba(0,0,0,.22); cursor: pointer;
+    }}
+    .locate-toggle.active {{ background: #1d4ed8; color: #fff; }}
+    .locate-toggle.error {{ border-color: #dc2626; color: #991b1b; background: #fff7ed; }}
+    body.show-info-panel .locate-toggle,
+    body.show-edit-panel .locate-toggle,
+    body.show-sos-panel .locate-toggle,
+    body.show-decision-panel .locate-toggle {{ display: none; }}
     .detour-label {{
       background: #111827; color: #fff; border: 2px solid #22c55e; border-radius: 999px;
       width: 28px; height: 28px; display: grid; place-items: center; font-size: 11px; font-weight: 700;
@@ -2235,7 +2470,8 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       }}
       .panel-left,
       .panel-right,
-      .sos-panel {{
+      .sos-panel,
+      .decision-panel {{
         display: none; left: 8px; right: 8px;
         bottom: 96px; max-width: none;
         max-height: 52vh; overflow: auto; padding: 12px;
@@ -2243,6 +2479,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       body.show-info-panel .panel-left {{ display: block; }}
       body.show-edit-panel .panel-right {{ display: block; }}
       body.show-sos-panel .sos-panel {{ display: block; }}
+      body.show-decision-panel .decision-panel {{ display: block; }}
       .panel-close {{ min-width: 70px; height: 34px; font-size: 13px; }}
       .small-btn {{ width: 100%; min-height: 44px; font-size: 14px; }}
       .info-tabs {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
@@ -2278,6 +2515,8 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       .offline-status {{ display: none; top: auto; left: 8px; right: 8px; bottom: 150px; transform: none; max-width: none; border-radius: 8px; }}
       body.is-offline .offline-status {{ display: block; }}
       .download-row {{ grid-template-columns: 1fr; }}
+      .action-row {{ grid-template-columns: 1fr; }}
+      .locate-toggle {{ right: 10px; bottom: 92px; min-width: 64px; height: 40px; }}
     }}
     @supports (-webkit-touch-callout: none) {{
       .panel-top {{
@@ -2297,6 +2536,10 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
         left: calc(env(safe-area-inset-left, 0px) + 14px);
         bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
       }}
+      .decision-panel {{
+        right: calc(env(safe-area-inset-right, 0px) + 14px);
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
+      }}
       .map-toggle {{
         bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
       }}
@@ -2304,6 +2547,10 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       .map-toggle-descent {{ left: calc(env(safe-area-inset-left, 0px) + 102px); }}
       .map-toggle-sos {{ left: calc(env(safe-area-inset-left, 0px) + 202px); }}
       .map-toggle-center {{ left: calc(env(safe-area-inset-left, 0px) + 284px); }}
+      .locate-toggle {{
+        right: calc(env(safe-area-inset-right, 0px) + 10px);
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 92px);
+      }}
       @media (max-width: 760px) {{
         .panel-top {{
           top: calc(env(safe-area-inset-top, 0px) + 8px);
@@ -2312,7 +2559,8 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
         }}
         .panel-left,
         .panel-right,
-        .sos-panel {{
+        .sos-panel,
+        .decision-panel {{
           left: calc(env(safe-area-inset-left, 0px) + 8px);
           right: calc(env(safe-area-inset-right, 0px) + 8px);
           bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
@@ -2348,14 +2596,31 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       <button id="closeInfoPanel" class="panel-close" type="button" aria-label="Закрити інфо" title="Закрити">Закрити</button>
     </div>
     <div class="info-tabs" role="tablist" aria-label="Розділи інформації">
-      <button class="info-tab active" type="button" data-info-tab="route">Маршрут</button>
+      <button class="info-tab active" type="button" data-info-tab="before">Перед</button>
+      <button class="info-tab" type="button" data-info-tab="route">Маршрут</button>
       <button class="info-tab" type="button" data-info-tab="descent">Спуск</button>
       <button class="info-tab" type="button" data-info-tab="water">Вода</button>
       <button class="info-tab" type="button" data-info-tab="sleep">Ночівля</button>
       <button class="info-tab" type="button" data-info-tab="risk">Ризики</button>
       <button class="info-tab" type="button" data-info-tab="offline">Офлайн</button>
     </div>
-    <div class="info-section active" data-info-section="route">
+    <div class="info-section active" data-info-section="before">
+      <p><b>Перед виходом:</b> коротка перевірка того, що реально впливає на безпеку.</p>
+      <div class="check-grid">
+{html_checks(PRE_DEPARTURE_CHECKS)}
+      </div>
+      <div class="action-row">
+        <button id="showSonnalpinDecision" class="action-btn warn" type="button">Рішення Sonnalpin</button>
+        <button id="showMyLocationFromInfo" class="action-btn" type="button">Моя GPS-позиція</button>
+        <a class="download-btn" href="print.html" target="_blank" rel="noreferrer">Аварійний лист</a>
+        <a class="download-btn" href="zugspitze_reintal_corrected_route.gpx" download>Основний GPX</a>
+      </div>
+      <p><b>Офіційні лінки для перевірки:</b></p>
+      <ul class="source-list">
+{html_source_links(SAFETY_LINKS)}
+      </ul>
+    </div>
+    <div class="info-section" data-info-section="route">
       <span class="legend-line" style="background:#16a34a"></span> Основний маршрут<br>
       <span class="legend-line" style="background:#22c55e"></span> Обхід Partnachalm / Hoher Weg<br>
       <span class="legend-line" style="background:#ef4444"></span> Закрито / НЕ ЙТИ<br>
@@ -2367,7 +2632,6 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
         <li>Геометрія обходу: OSM highway ways, не пряма лінія від Partnachalm до Bockhütte.</li>
         <li>Zugspitze facilities: перед виходом ще раз перевірити канатку, Zugspitzbahn і Gletscherbahn.</li>
       </ul>
-      <button id="openEditFromInfo" class="small-btn" type="button">Розширене: правка обходу</button>
     </div>
     <div class="info-section" data-info-section="water">
       <span class="legend-dot" style="background:#2563eb"></span> Вода / джерела<br>
@@ -2386,6 +2650,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       <span class="legend-line" style="background:#dc2626"></span> НЕ планувати<br>
       <div id="descentPicker" class="descent-picker" aria-label="Вибір маршруту спуску"></div>
       <button id="clearDescent" class="small-btn" type="button">Прибрати спуск з карти</button>
+      <button id="showSonnalpinDecisionFromDescent" class="small-btn" type="button">Рішення на Sonnalpin</button>
       <div id="descentNote" class="descent-note">Вибери варіант спуску вище. Найпростіші - Bahn/Eibsee, Bahn/Sonnalpin або Tiroler Zugspitzbahn.</div>
       <p>Пішохідні спуски тут для порівняння. Червоні варіанти показані тільки як “не йти”.</p>
       <p>Stopselzieher/Eibsee пішки не рекомендований через закриття Bayernsteig 812 за DAV.</p>
@@ -2394,16 +2659,27 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       <span class="legend-dot" style="background:#d97706"></span> Ризик / точка рішення<br>
       <p>DAV описує Reintal як довгий і віддалений маршрут. Фінал після Sonnalpin має осип, скелі, можливі снігові поля й туман на Zugspitzplatt.</p>
       <p>При втомі, нестачі часу або поганій погоді рішення біля Sonnalpin: спускатися Bahn, а не дотискати фінальний відрізок.</p>
+      <button id="showSonnalpinDecisionFromRisk" class="small-btn" type="button">Відкрити рішення Sonnalpin</button>
     </div>
     <div class="info-section" data-info-section="offline">
       <p><b>HTML працює без інтернету:</b> маршрути, спуски, POI, шари, popup і офлайн OSM-вектор уже всередині файла.</p>
       <p><b>Супутник тільки онлайн.</b> Якщо немає мережі, просто лишай шар “Офлайн OSM-вектор”.</p>
-      <p>Для реального походу також завантажити GPX у навігатор: Organic Maps, Mapy.cz, Garmin або інший застосунок.</p>
+      <p>Для реального походу також завантажити GPX у навігатор: Organic Maps, Mapy.cz, Garmin або інший застосунок. На iPhone не розраховувати, що Safari сам надійно збереже сайт офлайн.</p>
       <div class="download-row">
         <a class="download-btn" href="zugspitze_reintal_corrected_route.gpx" download>Основний GPX</a>
         <a class="download-btn" href="zugspitze_descent_options.gpx" download>Спуски GPX</a>
         <a class="download-btn" href="zugspitze_descent_options.kml" download>KML</a>
+        <a class="download-btn" href="print.html" target="_blank" rel="noreferrer">Аварійний лист</a>
+        <a class="download-btn" href="zugspitze_offline_pack.zip" download>ZIP офлайн</a>
       </div>
+      <p><b>iPhone офлайн:</b></p>
+      <ul class="source-list">
+{html_items(IPHONE_OFFLINE_STEPS)}
+      </ul>
+      <details>
+        <summary><b>Розширене</b></summary>
+        <button id="openEditFromInfo" class="small-btn" type="button">Правка обходу</button>
+      </details>
     </div>
   </div>
   <div id="sosPanel" class="panel sos-panel">
@@ -2420,6 +2696,26 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     </ul>
     <button id="copyMapCenter" class="small-btn" type="button">Копіювати координати центру карти</button>
   </div>
+  <div id="sonnalpinDecisionPanel" class="panel decision-panel">
+    <div class="panel-header">
+      <b>Sonnalpin: рішення</b>
+      <button id="closeSonnalpinDecision" class="panel-close" type="button" aria-label="Закрити рішення Sonnalpin" title="Закрити">Закрити</button>
+    </div>
+    <div class="decision-box">
+      <b>Йти фінал до вершини тільки якщо:</b>
+      <ul>
+{html_items(SONNALPIN_DECISION["go"])}
+      </ul>
+    </div>
+    <div class="decision-box" style="border-left-color:#dc2626;background:#fff7ed">
+      <b>Не йти далі, брати Bahn якщо:</b>
+      <ul>
+{html_items(SONNALPIN_DECISION["stop"])}
+      </ul>
+    </div>
+    <button id="focusSonnalpin" class="small-btn" type="button">Показати Sonnalpin на карті</button>
+    <button id="selectBahnSonnalpin" class="small-btn" type="button">Показати простий спуск Bahn/Sonnalpin</button>
+  </div>
   <div id="editPanel" class="panel panel-right">
     <div class="panel-header">
       <b>Правка точок обходу</b>
@@ -2434,6 +2730,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
   <button id="descentToggle" class="map-toggle map-toggle-descent" type="button" aria-expanded="false" aria-label="Відкрити спуски">Спуск</button>
   <button id="sosToggle" class="map-toggle map-toggle-sos" type="button" aria-expanded="false" aria-label="Відкрити SOS">SOS</button>
   <button id="centerToggle" class="map-toggle map-toggle-center" type="button" aria-label="Повернути карту до маршруту">Центр</button>
+  <button id="locateToggle" class="locate-toggle" type="button" aria-label="Показати мою GPS-позицію" title="Моя GPS-позиція">GPS</button>
 
   <script>
 {leaflet_js}
@@ -2454,6 +2751,12 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     const transportPoints = {js_json(TRANSPORT)};
     const viewpoints = {js_json(VIEWPOINTS)};
     const riskPoints = {js_json(RISK_POINTS)};
+    const decisionPoints = {js_json(DECISION_POINTS)};
+    const preDepartureChecks = {js_json(PRE_DEPARTURE_CHECKS)};
+    const iphoneOfflineSteps = {js_json(IPHONE_OFFLINE_STEPS)};
+    const safetyLinks = {js_json(SAFETY_LINKS)};
+    const sonnalpinDecision = {js_json(SONNALPIN_DECISION)};
+    const publicMapUrl = {js_json(PUBLIC_MAP_URL)};
     const sourceChecks = {js_json(SOURCE_CHECKS)};
     const sourceCheckDate = {js_json(SOURCE_CHECK_DATE)};
     const descentOptions = {js_json([{**option, "line": round_points(option["line"])} for option in descent_options])};
@@ -2517,6 +2820,8 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     const emergencyLayer = L.layerGroup();
     const transportLayer = L.layerGroup();
     const viewpointLayer = L.layerGroup();
+    const decisionLayer = L.layerGroup().addTo(map);
+    const locationLayer = L.layerGroup().addTo(map);
     const descentLayers = {{}};
     const descentOverlayLayers = {{}};
     const detourEditLayer = L.layerGroup();
@@ -2609,6 +2914,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     addPointMarkers(huts, hutLayer, "#15803d", "H", "hut");
     addPointMarkers(waterSources, waterLayer, "#2563eb", "W", "water");
     addPointMarkers(riskPoints, riskLayer, "#d97706", "!", "risk", "#7c2d12");
+    addPointMarkers(decisionPoints, decisionLayer, "#f59e0b", "D", "risk", "#7c2d12");
     addPointMarkers(overnight, overnightLayer, "#7c3aed", "N", "overnight");
     addPointMarkers(toilets, toiletLayer, "#0f766e", "WC", "view");
     addPointMarkers(emergencyPoints, emergencyLayer, "#dc2626", "SOS", "emergency", "#7f1d1d");
@@ -2695,8 +3001,12 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     const descentToggle = document.getElementById("descentToggle");
     const sosToggle = document.getElementById("sosToggle");
     const centerToggle = document.getElementById("centerToggle");
+    const locateToggle = document.getElementById("locateToggle");
     const routeNotice = document.getElementById("routeNotice");
     const offlineStatus = document.getElementById("offlineStatus");
+    let locationWatchId = null;
+    let locationMarker = null;
+    let locationAccuracyCircle = null;
 
     function hideRouteNotice() {{
       routeNotice.style.display = "none";
@@ -2704,7 +3014,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     }}
 
     function activeInfoTabKey() {{
-      return document.querySelector(".info-tab.active")?.getAttribute("data-info-tab") || "route";
+      return document.querySelector(".info-tab.active")?.getAttribute("data-info-tab") || "before";
     }}
 
     function syncPanelButtons() {{
@@ -2729,6 +3039,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       if (open) {{
         hideRouteNotice();
         document.body.classList.remove("show-sos-panel");
+        document.body.classList.remove("show-decision-panel");
         setEditPanel(false);
       }}
       syncPanelButtons();
@@ -2740,6 +3051,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
         hideRouteNotice();
         document.body.classList.remove("show-info-panel");
         document.body.classList.remove("show-sos-panel");
+        document.body.classList.remove("show-decision-panel");
         if (!map.hasLayer(detourEditLayer)) detourEditLayer.addTo(map);
       }} else if (map.hasLayer(detourEditLayer)) {{
         map.removeLayer(detourEditLayer);
@@ -2752,10 +3064,32 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       if (open) {{
         hideRouteNotice();
         document.body.classList.remove("show-info-panel");
+        document.body.classList.remove("show-decision-panel");
         setEditPanel(false);
         if (!map.hasLayer(emergencyLayer)) emergencyLayer.addTo(map);
       }}
       syncPanelButtons();
+    }}
+
+    function setDecisionPanel(open) {{
+      document.body.classList.toggle("show-decision-panel", open);
+      if (open) {{
+        hideRouteNotice();
+        document.body.classList.remove("show-info-panel");
+        document.body.classList.remove("show-sos-panel");
+        setEditPanel(false);
+        if (!map.hasLayer(decisionLayer)) decisionLayer.addTo(map);
+      }}
+      syncPanelButtons();
+    }}
+
+    function focusSonnalpin() {{
+      const point = sonnalpinDecision;
+      map.setView([point.lat, point.lon], Math.max(map.getZoom(), 15), {{ animate: true }});
+      L.popup(markerPopupOptions)
+        .setLatLng([point.lat, point.lon])
+        .setContent(`<div class="poi-popup poi-risk"><b>${{escapeHtml(point.name)}}</b><div>Точка рішення: фінал до вершини або Bahn вниз.</div><code>${{point.lat.toFixed(6)}}, ${{point.lon.toFixed(6)}}</code></div>`)
+        .openOn(map);
     }}
 
     infoToggle.addEventListener("click", () => {{
@@ -2774,8 +3108,20 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     document.getElementById("closeInfoPanel").addEventListener("click", () => setInfoPanel(false));
     document.getElementById("closeEditPanel").addEventListener("click", () => setEditPanel(false));
     document.getElementById("closeSosPanel").addEventListener("click", () => setSosPanel(false));
+    document.getElementById("closeSonnalpinDecision").addEventListener("click", () => setDecisionPanel(false));
     document.getElementById("closeRouteNotice").addEventListener("click", hideRouteNotice);
     document.getElementById("openEditFromInfo").addEventListener("click", () => setEditPanel(true));
+    document.getElementById("showSonnalpinDecision").addEventListener("click", () => setDecisionPanel(true));
+    document.getElementById("showSonnalpinDecisionFromDescent").addEventListener("click", () => setDecisionPanel(true));
+    document.getElementById("showSonnalpinDecisionFromRisk").addEventListener("click", () => setDecisionPanel(true));
+    document.getElementById("focusSonnalpin").addEventListener("click", () => focusSonnalpin());
+    document.getElementById("selectBahnSonnalpin").addEventListener("click", () => {{
+      setDecisionPanel(false);
+      activateInfoTab("descent");
+      setInfoPanel(true);
+      setSelectedDescent("descent_bahn_sonnalpin");
+    }});
+    document.getElementById("showMyLocationFromInfo").addEventListener("click", () => startLocationWatch());
     document.getElementById("copyMapCenter").addEventListener("click", async () => {{
       const center = map.getCenter();
       const coords = `${{center.lat.toFixed(6)}}, ${{center.lng.toFixed(6)}}`;
@@ -2788,6 +3134,57 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
         button.textContent = coords;
       }}
     }});
+
+    function setLocateState(state, label) {{
+      locateToggle.classList.toggle("active", state === "active");
+      locateToggle.classList.toggle("error", state === "error");
+      locateToggle.textContent = label;
+    }}
+
+    function updateLocationMarker(position) {{
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+      const accuracy = Math.round(position.coords.accuracy || 0);
+      const coords = `${{lat.toFixed(6)}}, ${{lon.toFixed(6)}}`;
+      const popup = `<div class="poi-popup poi-view"><b>Моя позиція</b><div>Точність GPS: ~${{accuracy}} м</div><code>${{coords}}</code><br><button class="popup-copy" type="button" data-coords="${{coords}}">Копіювати координати</button></div>`;
+      if (!locationMarker) {{
+        locationMarker = L.marker([lat, lon], {{ icon: divIcon("#1d4ed8", "GPS") }}).addTo(locationLayer);
+        locationAccuracyCircle = L.circle([lat, lon], {{ radius: accuracy || 30, color: "#1d4ed8", weight: 1, opacity: .7, fillColor: "#60a5fa", fillOpacity: .18 }}).addTo(locationLayer);
+      }} else {{
+        locationMarker.setLatLng([lat, lon]);
+        locationAccuracyCircle.setLatLng([lat, lon]);
+        locationAccuracyCircle.setRadius(accuracy || 30);
+      }}
+      locationMarker.bindPopup(popup, markerPopupOptions);
+      map.setView([lat, lon], Math.max(map.getZoom(), 15), {{ animate: true }});
+      setLocateState("active", "GPS");
+    }}
+
+    function startLocationWatch() {{
+      hideRouteNotice();
+      if (!navigator.geolocation) {{
+        setLocateState("error", "GPS!");
+        alert("GPS недоступний у цьому браузері.");
+        return;
+      }}
+      if (locationWatchId !== null) {{
+        navigator.geolocation.clearWatch(locationWatchId);
+        locationWatchId = null;
+        setLocateState("", "GPS");
+        return;
+      }}
+      setLocateState("active", "...");
+      locationWatchId = navigator.geolocation.watchPosition(
+        updateLocationMarker,
+        (error) => {{
+          setLocateState("error", "GPS!");
+          alert("Не вдалося отримати GPS: " + error.message);
+        }},
+        {{ enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }}
+      );
+    }}
+
+    locateToggle.addEventListener("click", () => startLocationWatch());
 
     function updateOnlineStatus() {{
       const offline = navigator.onLine === false;
@@ -2876,6 +3273,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
         "Хати / їжа": hutLayer,
         "Вода": waterLayer,
         "Ризики": riskLayer,
+        "Точки рішення": decisionLayer,
         "Ночівля": overnightLayer,
         "Туалети": toiletLayer,
         "Аварійне": emergencyLayer,
@@ -2931,6 +3329,231 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     OUT_INDEX.write_text(html_text, encoding="utf-8")
 
 
+def qr_data_url(text):
+    try:
+        import qrcode
+    except Exception:
+        return ""
+    image = qrcode.make(text)
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+def point_rows(points):
+    rows = []
+    for point in points:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(point['id'])}</td>"
+            f"<td>{html.escape(point['name'])}</td>"
+            f"<td>{point['lat']:.6f}, {point['lon']:.6f}</td>"
+            f"<td>{html.escape(point.get('note', ''))}</td>"
+            "</tr>"
+        )
+    return "\n".join(rows)
+
+
+def descent_rows(descent_options):
+    rows = []
+    for option in descent_options:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(option.get('select_label') or option['name'])}</td>"
+            f"<td>{html.escape(option.get('status', ''))}</td>"
+            f"<td>{html.escape(option.get('note', ''))}</td>"
+            "</tr>"
+        )
+    return "\n".join(rows)
+
+
+def write_print_html(descent_options):
+    qr = qr_data_url(PUBLIC_MAP_URL)
+    qr_html = f'<img class="qr" src="{qr}" alt="QR карта">' if qr else '<div class="qr-fallback">QR недоступний<br>див. URL нижче</div>'
+    html_text = f"""<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zugspitze Reintal: аварійний лист</title>
+  <style>
+    html, body {{ margin: 0; padding: 0; background: #f8fafc; color: #111827; font-family: Arial, sans-serif; }}
+    body {{ padding: 18px; }}
+    .sheet {{ max-width: 980px; margin: 0 auto; background: #fff; border: 1px solid #cbd5e1; padding: 18px; box-sizing: border-box; }}
+    h1 {{ margin: 0 0 4px; font-size: 22px; }}
+    h2 {{ margin: 16px 0 6px; font-size: 15px; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; }}
+    p {{ margin: 5px 0; }}
+    .top {{ display: grid; grid-template-columns: 1fr 150px; gap: 16px; align-items: start; }}
+    .qr {{ width: 150px; height: 150px; image-rendering: pixelated; }}
+    .qr-fallback {{ width: 150px; height: 150px; display: grid; place-items: center; text-align: center; border: 1px solid #cbd5e1; }}
+    .emergency {{ display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center; margin-top: 8px; }}
+    .number {{ font-size: 42px; font-weight: 900; color: #991b1b; border: 2px solid #991b1b; border-radius: 8px; text-align: center; padding: 8px 0; }}
+    ul {{ margin: 5px 0 0; padding-left: 18px; }}
+    li {{ margin: 3px 0; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }}
+    th, td {{ border: 1px solid #cbd5e1; padding: 5px 6px; vertical-align: top; }}
+    th {{ background: #f1f5f9; text-align: left; }}
+    .cols {{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }}
+    .warn {{ border-left: 5px solid #d97706; background: #fffbeb; padding: 8px 10px; }}
+    .danger {{ border-left: 5px solid #dc2626; background: #fff7ed; padding: 8px 10px; }}
+    .small {{ font-size: 11px; color: #334155; overflow-wrap: anywhere; }}
+    @page {{ size: A4; margin: 10mm; }}
+    @media print {{
+      body {{ background: #fff; padding: 0; }}
+      .sheet {{ border: 0; padding: 0; max-width: none; }}
+      h2 {{ break-after: avoid; }}
+      table {{ break-inside: avoid; }}
+      .no-print {{ display: none; }}
+    }}
+  </style>
+</head>
+<body>
+  <main class="sheet">
+    <section class="top">
+      <div>
+        <h1>Zugspitze Reintal: аварійний лист</h1>
+        <p><b>Перевірено:</b> {SOURCE_CHECK_DATE}</p>
+        <p><b>Карта:</b> <span class="small">{html.escape(PUBLIC_MAP_URL)}</span></p>
+        <p><b>Основний маршрут:</b> Kainzenbad → Skistadion → Partnachklamm → Partnachalm / Hoher Weg → Bockhütte → Reintalangerhütte → Knorrhütte → Sonnalpin → Zugspitze.</p>
+      </div>
+      <div>{qr_html}</div>
+    </section>
+
+    <section class="emergency">
+      <div class="number">112</div>
+      <div>
+        <b>Екстрений номер у Німеччині та Австрії.</b><br>
+        Сказати: маршрут Zugspitze/Reintal, найближча точка, координати з GPS/popup, стан людини, погода, кількість людей.
+      </div>
+    </section>
+
+    <div class="cols">
+      <section>
+        <h2>Перед виходом</h2>
+        <ul>
+{html_items(PRE_DEPARTURE_CHECKS)}
+        </ul>
+      </section>
+      <section>
+        <h2>iPhone / офлайн</h2>
+        <ul>
+{html_items(IPHONE_OFFLINE_STEPS)}
+        </ul>
+      </section>
+    </div>
+
+    <section>
+      <h2>Sonnalpin: рішення</h2>
+      <div class="cols">
+        <div class="warn">
+          <b>Йти фінал тільки якщо:</b>
+          <ul>
+{html_items(SONNALPIN_DECISION["go"])}
+          </ul>
+        </div>
+        <div class="danger">
+          <b>Брати Bahn, не йти далі якщо:</b>
+          <ul>
+{html_items(SONNALPIN_DECISION["stop"])}
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Точки рішення</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Точка</th><th>Координати</th><th>Що вирішити</th></tr></thead>
+        <tbody>
+{point_rows(DECISION_POINTS)}
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Аварійне / транспорт / вода</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Точка</th><th>Координати</th><th>Примітка</th></tr></thead>
+        <tbody>
+{point_rows(EMERGENCY + WATER_SOURCES[:6] + TRANSPORT[:5])}
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Спуски</h2>
+      <table>
+        <thead><tr><th>Варіант</th><th>Статус</th><th>Примітка</th></tr></thead>
+        <tbody>
+{descent_rows(descent_options)}
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Офіційні джерела для перевірки</h2>
+      <ul>
+{html_source_links(SAFETY_LINKS)}
+      </ul>
+      <p class="small">Файли резерву: zugspitze_reintal_corrected_route.gpx, zugspitze_descent_options.gpx, zugspitze_descent_options.kml.</p>
+    </section>
+  </main>
+</body>
+</html>
+"""
+    OUT_PRINT.write_text(html_text, encoding="utf-8")
+
+
+def write_offline_readme():
+    text = f"""Zugspitze Reintal offline pack
+Перевірено: {SOURCE_CHECK_DATE}
+
+Як відкрити як файл:
+1. Розпакуй ZIP у звичайну папку.
+2. Відкрий index.html у браузері.
+3. Карта, маршрути, POI, шари, GPS-кнопка і popup працюють без CDN.
+4. Супутник онлайн працює тільки з інтернетом.
+5. Для походу імпортуй GPX у навігатор, не покладайся тільки на HTML.
+
+Основні файли:
+- index.html - основна карта.
+- print.html - аварійний лист A4 з QR, SOS, координатами і рішенням Sonnalpin.
+- zugspitze_reintal_corrected_route.gpx - основний маршрут.
+- zugspitze_descent_options.gpx - варіанти спусків.
+- zugspitze_descent_options.kml - спуски для KML.
+- zugspitze_reintal_corrected_map.kml - основний маршрут для KML.
+
+iPhone:
+- Завантажити ZIP через GitHub Pages або GitHub.
+- Розпакувати у Files.
+- Відкрити index.html.
+- GPX окремо імпортувати в Organic Maps / Mapy.cz / Garmin.
+
+Публічна карта:
+{PUBLIC_MAP_URL}
+"""
+    OUT_OFFLINE_README.write_text(text, encoding="utf-8")
+
+
+def write_offline_zip():
+    files = [
+        OUT_INDEX,
+        OUT_HTML,
+        OUT_PRINT,
+        OUT_GPX,
+        OUT_KML,
+        OUT_DESCENT_GPX,
+        OUT_DESCENT_KML,
+        OUT_JSON,
+        OUT_OFFLINE_README,
+    ]
+    with zipfile.ZipFile(OUT_OFFLINE_ZIP, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for file_path in files:
+            if file_path.exists():
+                archive.write(file_path, arcname=file_path.name)
+
+
 def main():
     original_points = load_source_gpx_points()
     closed_points = parse_kml_linestring_by_name("Closed original segment")
@@ -2949,9 +3572,14 @@ def main():
     write_descent_gpx(descent_options)
     write_descent_kml(descent_options)
     write_html(original_points, corrected_points, segments, detour_points, detour_check_points, closed_points, used_way_summary, descent_options)
+    write_print_html(descent_options)
+    write_offline_readme()
+    write_offline_zip()
 
     print(f"Wrote {OUT_HTML.name}")
     print(f"Wrote {OUT_INDEX.name}")
+    print(f"Wrote {OUT_PRINT.name}")
+    print(f"Wrote {OUT_OFFLINE_ZIP.name}")
     print(f"Wrote {OUT_JSON.name}")
     print(f"Wrote {OUT_GPX.name}")
     print(f"Wrote {OUT_KML.name}")
