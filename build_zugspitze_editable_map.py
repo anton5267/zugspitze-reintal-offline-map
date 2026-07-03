@@ -21,6 +21,10 @@ OUT_INDEX = ROOT / "index.html"
 OUT_PRINT = ROOT / "print.html"
 OUT_OFFLINE_README = ROOT / "OFFLINE_README.txt"
 OUT_OFFLINE_ZIP = ROOT / "zugspitze_offline_pack.zip"
+OUT_MANIFEST = ROOT / "manifest.webmanifest"
+OUT_SERVICE_WORKER = ROOT / "service-worker.js"
+OUT_ICON_192 = ROOT / "icon-192.png"
+OUT_ICON_512 = ROOT / "icon-512.png"
 OUT_JSON = ROOT / "zugspitze_reintal_editable_points.json"
 OUT_GPX = ROOT / "zugspitze_reintal_corrected_route.gpx"
 OUT_KML = ROOT / "zugspitze_reintal_corrected_map.kml"
@@ -132,10 +136,13 @@ PRE_DEPARTURE_CHECKS = [
 ]
 
 IPHONE_OFFLINE_STEPS = [
-    "Перед походом відкрити GitHub Pages і перевірити, що карта завантажилась.",
-    "У навігаторі обов'язково імпортувати GPX: HTML у Safari не замінює офлайн-навігацію.",
+    "На iPhone не відкривати index.html з Files як основний спосіб: Files часто показує preview, де JS/GPS не працюють.",
+    "Відкрити GitHub Pages у Safari, натиснути Share і Add to Home Screen.",
+    "Відкрити додану іконку з Home Screen і дочекатися статусу офлайн-кешу.",
+    "ZIP використовувати як резерв для GPX/print.html або для ПК, не як основну iPhone-карту.",
+    "У навігаторі обов'язково імпортувати GPX: web-app не замінює офлайн-навігацію.",
     "В Organic Maps або Mapy.cz завантажити офлайн-мапи Bayern/Tirol.",
-    "Зберегти GPX/KML і print.html у Files / iCloud Drive, щоб мати резерв без Safari.",
+    "Зберегти GPX/KML і print.html у Files / iCloud Drive, щоб мати резерв.",
     "Дати Safari/навігатору доступ до Location; на маршруті перевірити GPS ще біля старту.",
     "Не покладатися на онлайн-супутник без інтернету; default-шар карти - офлайн OSM-вектор.",
 ]
@@ -2298,6 +2305,12 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Zugspitze Reintal: карта маршруту</title>
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Zugspitze">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <style>
 {leaflet_css}
   </style>
@@ -2395,6 +2408,8 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     .decision-box {{ border-left: 4px solid #d97706; background: #fffbeb; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }}
     .decision-box ul {{ margin: 5px 0 0; padding-left: 17px; }}
     .decision-box li {{ margin: 3px 0; }}
+    .pwa-box {{ border-left: 4px solid #1d4ed8; background: #eff6ff; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }}
+    .pwa-status {{ margin-top: 6px; font-weight: 700; color: #1e3a8a; }}
     .offline-status {{
       position: fixed; z-index: 900; top: 10px; left: 50%; right: auto; transform: translateX(-50%);
       max-width: min(430px, calc(100vw - 560px));
@@ -2665,6 +2680,11 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       <p><b>HTML працює без інтернету:</b> маршрути, спуски, POI, шари, popup і офлайн OSM-вектор уже всередині файла.</p>
       <p><b>Супутник тільки онлайн.</b> Якщо немає мережі, просто лишай шар “Офлайн OSM-вектор”.</p>
       <p>Для реального походу також завантажити GPX у навігатор: Organic Maps, Mapy.cz, Garmin або інший застосунок. На iPhone не розраховувати, що Safari сам надійно збереже сайт офлайн.</p>
+      <div class="pwa-box">
+        <b>Найкраще для iPhone:</b> відкрити цю GitHub Pages-сторінку в Safari, Share → Add to Home Screen, потім відкрити іконку з Home Screen. Files/ZIP на iPhone часто відкриває HTML як preview, де кнопки не працюють.
+        <div id="pwaStatus" class="pwa-status">Офлайн web-app: перевіряється...</div>
+        <button id="cacheOfflineApp" class="small-btn" type="button">Зберегти web-app офлайн</button>
+      </div>
       <div class="download-row">
         <a class="download-btn" href="zugspitze_reintal_corrected_route.gpx" download>Основний GPX</a>
         <a class="download-btn" href="zugspitze_descent_options.gpx" download>Спуски GPX</a>
@@ -2762,6 +2782,23 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     const descentOptions = {js_json([{**option, "line": round_points(option["line"])} for option in descent_options])};
     const offlineBaseWays = {js_json(offline_base_ways)};
     const osmWaySummary = {js_json(used_way_summary)};
+    const pwaCacheName = "zugspitze-pwa-20260703-2";
+    const pwaAssets = [
+      "./",
+      "index.html",
+      "print.html",
+      "manifest.webmanifest",
+      "service-worker.js",
+      "icon-192.png",
+      "icon-512.png",
+      "zugspitze_reintal_corrected_route.gpx",
+      "zugspitze_reintal_corrected_map.kml",
+      "zugspitze_descent_options.gpx",
+      "zugspitze_descent_options.kml",
+      "zugspitze_reintal_editable_points.json",
+      "OFFLINE_README.txt",
+      "zugspitze_offline_pack.zip"
+    ];
     const isPhoneLayout = window.matchMedia("(max-width: 760px)").matches;
 
     const map = L.map("map", {{
@@ -3004,6 +3041,8 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     const locateToggle = document.getElementById("locateToggle");
     const routeNotice = document.getElementById("routeNotice");
     const offlineStatus = document.getElementById("offlineStatus");
+    const pwaStatus = document.getElementById("pwaStatus");
+    const cacheOfflineAppButton = document.getElementById("cacheOfflineApp");
     let locationWatchId = null;
     let locationMarker = null;
     let locationAccuracyCircle = null;
@@ -3197,6 +3236,65 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     window.addEventListener("online", updateOnlineStatus);
     window.addEventListener("offline", updateOnlineStatus);
     updateOnlineStatus();
+
+    async function updatePwaStatus(message) {{
+      if (pwaStatus) pwaStatus.textContent = message;
+    }}
+
+    async function checkPwaCache() {{
+      if (!("caches" in window) || location.protocol === "file:") {{
+        updatePwaStatus("iPhone Files/ZIP режим: інтерактив може не працювати. Для iPhone відкрий GitHub Pages у Safari і Add to Home Screen.");
+        return false;
+      }}
+      const cache = await caches.open(pwaCacheName);
+      const cachedIndex = await cache.match("index.html");
+      const cachedPrint = await cache.match("print.html");
+      if (cachedIndex && cachedPrint) {{
+        updatePwaStatus("Офлайн web-app готовий: карта і аварійний лист у кеші.");
+        return true;
+      }}
+      updatePwaStatus("Офлайн web-app ще не збережений. Натисни кнопку нижче онлайн.");
+      return false;
+    }}
+
+    async function cacheOfflineApp() {{
+      if (!("caches" in window) || location.protocol === "file:") {{
+        updatePwaStatus("Не можна кешувати з Files/file://. Відкрий GitHub Pages у Safari.");
+        return;
+      }}
+      cacheOfflineAppButton.disabled = true;
+      const oldText = cacheOfflineAppButton.textContent;
+      cacheOfflineAppButton.textContent = "Зберігаю...";
+      updatePwaStatus("Зберігаю карту, GPX/KML, print.html і ZIP...");
+      try {{
+        const cache = await caches.open(pwaCacheName);
+        await cache.addAll(pwaAssets);
+        updatePwaStatus("Готово: web-app збережений офлайн. Тепер додай/відкрий з Home Screen.");
+        cacheOfflineAppButton.textContent = "Офлайн збережено";
+      }} catch (error) {{
+        updatePwaStatus("Не вдалося зберегти офлайн: " + error.message);
+        cacheOfflineAppButton.textContent = oldText;
+      }} finally {{
+        cacheOfflineAppButton.disabled = false;
+      }}
+    }}
+
+    async function registerServiceWorker() {{
+      if (!("serviceWorker" in navigator) || location.protocol === "file:") {{
+        await checkPwaCache();
+        return;
+      }}
+      try {{
+        await navigator.serviceWorker.register("service-worker.js");
+        await navigator.serviceWorker.ready;
+        await checkPwaCache();
+      }} catch (error) {{
+        updatePwaStatus("Service worker недоступний: " + error.message);
+      }}
+    }}
+
+    cacheOfflineAppButton.addEventListener("click", () => cacheOfflineApp());
+    registerServiceWorker();
     syncPanelButtons();
 
     document.querySelectorAll(".info-tab").forEach((button) => {{
@@ -3525,9 +3623,10 @@ def write_offline_readme():
 - zugspitze_reintal_corrected_map.kml - основний маршрут для KML.
 
 iPhone:
-- Завантажити ZIP через GitHub Pages або GitHub.
-- Розпакувати у Files.
-- Відкрити index.html.
+- Не використовувати Files/ZIP як основний спосіб для інтерактивної карти: iOS може відкрити HTML як preview, де JS/GPS не працюють.
+- Найкраще: відкрити GitHub Pages у Safari, Share -> Add to Home Screen.
+- Відкрити іконку з Home Screen і натиснути "Зберегти web-app офлайн" у вкладці Офлайн.
+- ZIP тримати як резерв для GPX/print.html або для ПК.
 - GPX окремо імпортувати в Organic Maps / Mapy.cz / Garmin.
 
 Публічна карта:
@@ -3547,11 +3646,141 @@ def write_offline_zip():
         OUT_DESCENT_KML,
         OUT_JSON,
         OUT_OFFLINE_README,
+        OUT_MANIFEST,
+        OUT_SERVICE_WORKER,
+        OUT_ICON_192,
+        OUT_ICON_512,
     ]
     with zipfile.ZipFile(OUT_OFFLINE_ZIP, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for file_path in files:
             if file_path.exists():
                 archive.write(file_path, arcname=file_path.name)
+
+
+def write_pwa_icons():
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except Exception:
+        return
+    for size, output in ((192, OUT_ICON_192), (512, OUT_ICON_512)):
+        image = Image.new("RGB", (size, size), "#111827")
+        draw = ImageDraw.Draw(image)
+        margin = max(12, size // 14)
+        draw.rounded_rectangle(
+            [margin, margin, size - margin, size - margin],
+            radius=size // 9,
+            fill="#f8fafc",
+            outline="#0ea5e9",
+            width=max(3, size // 48),
+        )
+        draw.line(
+            [
+                (size * 0.24, size * 0.70),
+                (size * 0.38, size * 0.56),
+                (size * 0.48, size * 0.63),
+                (size * 0.64, size * 0.37),
+                (size * 0.78, size * 0.58),
+            ],
+            fill="#16a34a",
+            width=max(8, size // 22),
+            joint="curve",
+        )
+        draw.ellipse(
+            [size * 0.66, size * 0.22, size * 0.82, size * 0.38],
+            fill="#f59e0b",
+            outline="#7c2d12",
+            width=max(2, size // 80),
+        )
+        try:
+            font = ImageFont.truetype("arial.ttf", size // 6)
+        except Exception:
+            font = ImageFont.load_default()
+        draw.text((size * 0.26, size * 0.24), "Z", fill="#111827", font=font)
+        image.save(output)
+
+
+def write_pwa_files():
+    manifest = {
+        "name": "Zugspitze Reintal Offline Map",
+        "short_name": "Zugspitze",
+        "description": "Offline hiking map for Zugspitze via Reintal with POI, descents, SOS and GPX/KML.",
+        "start_url": "./index.html",
+        "scope": "./",
+        "display": "standalone",
+        "orientation": "any",
+        "background_color": "#edf2f7",
+        "theme_color": "#111827",
+        "lang": "uk",
+        "icons": [
+            {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
+        ],
+    }
+    OUT_MANIFEST.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    assets = [
+        "./",
+        "index.html",
+        "print.html",
+        "manifest.webmanifest",
+        "service-worker.js",
+        "icon-192.png",
+        "icon-512.png",
+        "zugspitze_reintal_corrected_route.gpx",
+        "zugspitze_reintal_corrected_map.kml",
+        "zugspitze_descent_options.gpx",
+        "zugspitze_descent_options.kml",
+        "zugspitze_reintal_editable_points.json",
+        "OFFLINE_README.txt",
+        "zugspitze_offline_pack.zip",
+    ]
+    service_worker = f"""const CACHE_NAME = "zugspitze-pwa-20260703-2";
+const ASSETS = {json.dumps(assets, ensure_ascii=False, indent=2)};
+
+self.addEventListener("install", (event) => {{
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+  );
+}});
+
+self.addEventListener("activate", (event) => {{
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("zugspitze-pwa-") && key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+}});
+
+self.addEventListener("fetch", (event) => {{
+  const request = event.request;
+  if (request.method !== "GET") return;
+
+  if (request.mode === "navigate") {{
+    event.respondWith(
+      fetch(request)
+        .then((response) => {{
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put("index.html", copy));
+          return response;
+        }})
+        .catch(() => caches.match("index.html"))
+    );
+    return;
+  }}
+
+  event.respondWith(
+    caches.match(request)
+      .then((cached) => cached || fetch(request).then((response) => {{
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        return response;
+      }}))
+  );
+}});
+"""
+    OUT_SERVICE_WORKER.write_text(service_worker, encoding="utf-8")
+    write_pwa_icons()
 
 
 def main():
@@ -3574,11 +3803,14 @@ def main():
     write_html(original_points, corrected_points, segments, detour_points, detour_check_points, closed_points, used_way_summary, descent_options)
     write_print_html(descent_options)
     write_offline_readme()
+    write_pwa_files()
     write_offline_zip()
 
     print(f"Wrote {OUT_HTML.name}")
     print(f"Wrote {OUT_INDEX.name}")
     print(f"Wrote {OUT_PRINT.name}")
+    print(f"Wrote {OUT_MANIFEST.name}")
+    print(f"Wrote {OUT_SERVICE_WORKER.name}")
     print(f"Wrote {OUT_OFFLINE_ZIP.name}")
     print(f"Wrote {OUT_JSON.name}")
     print(f"Wrote {OUT_GPX.name}")

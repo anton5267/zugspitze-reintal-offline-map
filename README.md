@@ -14,7 +14,8 @@ Notes:
 - Closed or technical descent routes are marked as "НЕ планувати" in the map.
 - `print.html` is an A4 emergency sheet with QR, SOS, key coordinates, decision points, and official pre-departure links.
 - The interactive map includes GPS locate, a pre-departure checklist, and a Sonnalpin decision panel.
-- For offline file use, download `zugspitze_offline_pack.zip`, extract it, and open `index.html`.
+- Best iPhone mode: open GitHub Pages in Safari, use Share -> Add to Home Screen, then cache the web app from the `Офлайн` tab.
+- ZIP/file mode is mainly a backup for GPX, `print.html`, or desktop browsers. iPhone Files may open HTML as a preview where JS/GPS does not work.
 
 Main files:
 
@@ -25,4 +26,5 @@ Main files:
 - `zugspitze_descent_options.kml` - descent options for KML tools.
 - `print.html` - printable emergency sheet.
 - `zugspitze_offline_pack.zip` - offline pack with map, print sheet, GPX/KML, and local instructions.
+- `manifest.webmanifest` / `service-worker.js` - PWA offline cache for GitHub Pages / iPhone Home Screen.
 - `build_zugspitze_editable_map.py` - generator.

@@ -17,9 +17,10 @@ Zugspitze Reintal offline pack
 - zugspitze_reintal_corrected_map.kml - основний маршрут для KML.
 
 iPhone:
-- Завантажити ZIP через GitHub Pages або GitHub.
-- Розпакувати у Files.
-- Відкрити index.html.
+- Не використовувати Files/ZIP як основний спосіб для інтерактивної карти: iOS може відкрити HTML як preview, де JS/GPS не працюють.
+- Найкраще: відкрити GitHub Pages у Safari, Share -> Add to Home Screen.
+- Відкрити іконку з Home Screen і натиснути "Зберегти web-app офлайн" у вкладці Офлайн.
+- ZIP тримати як резерв для GPX/print.html або для ПК.
 - GPX окремо імпортувати в Organic Maps / Mapy.cz / Garmin.
 
 Публічна карта:
