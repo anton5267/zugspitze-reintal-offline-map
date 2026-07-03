@@ -1,0 +1,20 @@
+Organic Maps import pack - Zugspitze/Reintal
+Перевірено: 03.07.2026
+
+Головний файл:
+- zugspitze_organic_maps_import.kmz - один файл для імпорту в Organic Maps: основний маршрут, обхід, спуски, вода, хати, ночівля, SOS, транспорт, ризики.
+
+iPhone:
+1. Встанови Organic Maps з App Store.
+2. У самій Organic Maps завантаж офлайн-мапи: Germany/Bavaria і Austria/Tyrol.
+3. Відкрий zugspitze_organic_maps_import.kmz з Safari, Files, iCloud або GitHub Pages.
+4. Натисни Share і вибери "Import with Organic Maps" / Organic Maps.
+5. Після імпорту перевір Bookmarks and Tracks.
+
+Важливо:
+- Якщо імпортувати повторно, Organic Maps може створити дубль. Перед повторним імпортом краще видалити старий список Zugspitze.
+- Червоні треки "НЕ планувати" залишені тільки як попередження, не як маршрут.
+- Для походу все одно перевір Partnachklamm, Bahn, погоду і сніг у день виходу.
+
+Публічна карта:
+https://anton5267.github.io/zugspitze-reintal-offline-map/

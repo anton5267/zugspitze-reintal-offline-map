@@ -10,7 +10,7 @@ Notes:
 
 - The HTML map is self-contained and works without internet.
 - The satellite layer is optional and needs internet.
-- GPX/KML files are included for import into Organic Maps, Mapy.cz, Garmin, or another navigator.
+- `zugspitze_organic_maps_import.kmz` is the main one-file import for Organic Maps; GPX/KML files are included as backups for Mapy.cz, Garmin, or another navigator.
 - Closed or technical descent routes are marked as "НЕ планувати" in the map.
 - `print.html` is an A4 emergency sheet with QR, SOS, key coordinates, decision points, and official pre-departure links.
 - The interactive map includes GPS locate, a pre-departure checklist, and a Sonnalpin decision panel.
@@ -24,6 +24,8 @@ Main files:
 - `zugspitze_reintal_corrected_route.gpx` - main corrected route.
 - `zugspitze_descent_options.gpx` - descent options.
 - `zugspitze_descent_options.kml` - descent options for KML tools.
+- `zugspitze_organic_maps_import.kmz` - one-file Organic Maps import with route, descents, POI, water, huts, SOS, transport, and risks.
+- `ORGANIC_MAPS_IMPORT.txt` - short iPhone/Organic Maps import instructions.
 - `print.html` - printable emergency sheet.
 - `zugspitze_offline_pack.zip` - offline pack with map, print sheet, GPX/KML, and local instructions.
 - `manifest.webmanifest` / `service-worker.js` - PWA offline cache for GitHub Pages / iPhone Home Screen.

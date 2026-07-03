@@ -32,6 +32,9 @@ OUT_GPX = ROOT / "zugspitze_reintal_corrected_route.gpx"
 OUT_KML = ROOT / "zugspitze_reintal_corrected_map.kml"
 OUT_DESCENT_GPX = ROOT / "zugspitze_descent_options.gpx"
 OUT_DESCENT_KML = ROOT / "zugspitze_descent_options.kml"
+OUT_ORGANIC_KML = ROOT / "zugspitze_organic_maps_import.kml"
+OUT_ORGANIC_KMZ = ROOT / "zugspitze_organic_maps_import.kmz"
+OUT_ORGANIC_README = ROOT / "ORGANIC_MAPS_IMPORT.txt"
 OSM_CACHE = ROOT / "zugspitze_reintal_osm_highways_cache.json"
 DESCENT_OSM_CACHE = ROOT / "zugspitze_descent_osm_highways_cache.json"
 OFFLINE_OSM_CACHE = ROOT / "zugspitze_offline_osm_cache.json"
@@ -2117,6 +2120,136 @@ def write_kml(segments, closed_points, detour_check_points):
     OUT_KML.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def kml_point_placemark(point, style_id, prefix=""):
+    point_id = point.get("id", "")
+    name = f"{prefix}{point_id + ' ' if point_id else ''}{point['name']}"
+    description = point_description(point) or point.get("note", "")
+    return (
+        f"    <Placemark><name>{html.escape(name)}</name><styleUrl>#{style_id}</styleUrl>"
+        f"<description>{html.escape(description)}</description><Point>"
+        f"<coordinates>{point['lon']:.6f},{point['lat']:.6f},0</coordinates></Point></Placemark>"
+    )
+
+
+def kml_line_placemark(name, points, style_id, description=""):
+    return (
+        f"    <Placemark><name>{html.escape(name)}</name><styleUrl>#{style_id}</styleUrl>"
+        f"<description>{html.escape(description)}</description>"
+        f"<LineString><tessellate>1</tessellate><coordinates>{kml_coords(points)}</coordinates></LineString></Placemark>"
+    )
+
+
+def kml_folder(name, entries):
+    lines = [f"  <Folder><name>{html.escape(name)}</name>"]
+    lines.extend(entry for entry in entries if entry)
+    lines.append("  </Folder>")
+    return lines
+
+
+def write_organic_maps_readme():
+    text = f"""Organic Maps import pack - Zugspitze/Reintal
+Перевірено: {SOURCE_CHECK_DATE}
+
+Головний файл:
+- {OUT_ORGANIC_KMZ.name} - один файл для імпорту в Organic Maps: основний маршрут, обхід, спуски, вода, хати, ночівля, SOS, транспорт, ризики.
+
+iPhone:
+1. Встанови Organic Maps з App Store.
+2. У самій Organic Maps завантаж офлайн-мапи: Germany/Bavaria і Austria/Tyrol.
+3. Відкрий {OUT_ORGANIC_KMZ.name} з Safari, Files, iCloud або GitHub Pages.
+4. Натисни Share і вибери "Import with Organic Maps" / Organic Maps.
+5. Після імпорту перевір Bookmarks and Tracks.
+
+Важливо:
+- Якщо імпортувати повторно, Organic Maps може створити дубль. Перед повторним імпортом краще видалити старий список Zugspitze.
+- Червоні треки "НЕ планувати" залишені тільки як попередження, не як маршрут.
+- Для походу все одно перевір Partnachklamm, Bahn, погоду і сніг у день виходу.
+
+Публічна карта:
+{PUBLIC_MAP_URL}
+"""
+    OUT_ORGANIC_README.write_text(text, encoding="utf-8")
+
+
+def write_organic_maps_import(corrected_points, segments, closed_points, detour_check_points, descent_options):
+    lines = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>',
+        "  <name>Zugspitze Reintal Organic Maps import</name>",
+        '  <Style id="om-main"><LineStyle><color>ff16a34a</color><width>5</width></LineStyle></Style>',
+        '  <Style id="om-detour"><LineStyle><color>ff22c55e</color><width>6</width></LineStyle></Style>',
+        '  <Style id="om-closed"><LineStyle><color>ff2626dc</color><width>6</width></LineStyle></Style>',
+        '  <Style id="om-alpine"><LineStyle><color>ffea33a9</color><width>5</width></LineStyle></Style>',
+        '  <Style id="om-descent-recommended"><LineStyle><color>ff64748b</color><width>4</width></LineStyle></Style>',
+        '  <Style id="om-descent-caution"><LineStyle><color>ff0ea5f9</color><width>4</width></LineStyle></Style>',
+        '  <Style id="om-descent-blocked"><LineStyle><color>ff2626dc</color><width>4</width></LineStyle></Style>',
+        '  <Style id="om-hut"><IconStyle><scale>1.1</scale><color>ff0ea5f9</color></IconStyle></Style>',
+        '  <Style id="om-sleep"><IconStyle><scale>1.1</scale><color>ffa855f7</color></IconStyle></Style>',
+        '  <Style id="om-water"><IconStyle><scale>1.1</scale><color>ff2563eb</color></IconStyle></Style>',
+        '  <Style id="om-sos"><IconStyle><scale>1.1</scale><color>ff2626dc</color></IconStyle></Style>',
+        '  <Style id="om-transport"><IconStyle><scale>1.1</scale><color>ff64748b</color></IconStyle></Style>',
+        '  <Style id="om-risk"><IconStyle><scale>1.1</scale><color>ff0ea5f9</color></IconStyle></Style>',
+        '  <Style id="om-view"><IconStyle><scale>1.1</scale><color>ff16a34a</color></IconStyle></Style>',
+        '  <Style id="om-toilet"><IconStyle><scale>1.1</scale><color>ff64748b</color></IconStyle></Style>',
+        '  <Style id="om-point"><IconStyle><scale>1.1</scale></IconStyle></Style>',
+    ]
+
+    route_entries = [
+        kml_line_placemark(
+            "Основний маршрут Zugspitze через Reintal",
+            corrected_points,
+            "om-main",
+            "Kainzenbad / Skistadion -> Partnachalm / Hoher Weg -> Bockhütte -> Reintalangerhütte -> Knorrhütte -> Sonnalpin -> Zugspitze.",
+        )
+    ]
+    for name, points in segments.items():
+        style = "om-detour" if "Обхід" in name else "om-alpine" if "Sonnalpin" in name else "om-main"
+        route_entries.append(kml_line_placemark(name, points, style, "Сегмент основного маршруту."))
+    route_entries.append(kml_line_placemark("Закрито / НЕ ЙТИ", closed_points, "om-closed", "Закритий коридор після Partnachklamm; тримати обхід через Partnachalm / Hoher Weg."))
+    for point in detour_check_points:
+        route_entries.append(kml_point_placemark(point, "om-point", "Обхід "))
+    lines.extend(kml_folder("01 Маршрут і закриття", route_entries))
+
+    descent_entries = []
+    for option in descent_options:
+        style = f"om-descent-{descent_style_id(option)}"
+        if option.get("line"):
+            descent_entries.append(
+                kml_line_placemark(
+                    option["name"],
+                    option["line"],
+                    style,
+                    f"{option.get('status', '')} | {option.get('note', '')}",
+                )
+            )
+        for point in option.get("points", []):
+            descent_entries.append(kml_point_placemark(point, style, "Спуск "))
+    lines.extend(kml_folder("02 Спуски і транспортні варіанти", descent_entries))
+
+    point_folders = [
+        ("03 Вода", WATER_SOURCES, "om-water", "Вода "),
+        ("04 Хати і їжа", HUTS, "om-hut", "Хата "),
+        ("05 Ночівля", OVERNIGHT, "om-sleep", "Ночівля "),
+        ("06 SOS і аварійне", EMERGENCY, "om-sos", "SOS "),
+        ("07 Транспорт", TRANSPORT, "om-transport", "Транспорт "),
+        ("08 Ризики і рішення", RISK_POINTS + DECISION_POINTS, "om-risk", "Рішення "),
+        ("09 Оглядові точки", VIEWPOINTS, "om-view", "Огляд "),
+        ("10 Туалети", TOILETS, "om-toilet", "WC "),
+        ("11 Інші контрольні точки", POI, "om-point", "Точка "),
+    ]
+    for folder_name, points, style_id, prefix in point_folders:
+        entries = [kml_point_placemark(point, style_id, prefix) for point in points]
+        lines.extend(kml_folder(folder_name, entries))
+
+    lines.append("</Document></kml>")
+    kml_text = "\n".join(lines) + "\n"
+    OUT_ORGANIC_KML.write_text(kml_text, encoding="utf-8")
+    write_organic_maps_readme()
+    with zipfile.ZipFile(OUT_ORGANIC_KMZ, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        archive.writestr("doc.kml", kml_text)
+        archive.write(OUT_ORGANIC_README, arcname=OUT_ORGANIC_README.name)
+
+
 def round_points(points, digits=6):
     return [[round(lat, digits), round(lon, digits)] for lat, lon in points]
 
@@ -2686,13 +2819,14 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     <div class="info-section" data-info-section="offline">
       <p><b>HTML працює без інтернету:</b> маршрути, спуски, POI, шари, popup і офлайн OSM-вектор уже всередині файла.</p>
       <p><b>Супутник тільки онлайн.</b> Якщо немає мережі, просто лишай шар “Офлайн OSM-вектор”.</p>
-      <p>Для реального походу також завантажити GPX у навігатор: Organic Maps, Mapy.cz, Garmin або інший застосунок. На iPhone не розраховувати, що Safari сам надійно збереже сайт офлайн.</p>
+      <p>Для реального походу також завантажити Organic Maps KMZ або GPX у навігатор. На iPhone не розраховувати, що Safari сам надійно збереже сайт офлайн.</p>
       <div class="pwa-box">
         <b>Найкраще для iPhone:</b> відкрити цю GitHub Pages-сторінку в Safari, Share → Add to Home Screen, потім запускати саме іконку з Home Screen. Тоді відкривається як приложуха без Safari-рамки. Files/ZIP на iPhone часто відкриває HTML як preview, де кнопки не працюють.
         <div id="pwaStatus" class="pwa-status">Офлайн web-app: перевіряється...</div>
         <button id="cacheOfflineApp" class="small-btn" type="button">Зберегти web-app офлайн</button>
       </div>
       <div class="download-row">
+        <a class="download-btn" href="zugspitze_organic_maps_import.kmz" download>Organic Maps KMZ</a>
         <a class="download-btn" href="zugspitze_reintal_corrected_route.gpx" download>Основний GPX</a>
         <a class="download-btn" href="zugspitze_descent_options.gpx" download>Спуски GPX</a>
         <a class="download-btn" href="zugspitze_descent_options.kml" download>KML</a>
@@ -2801,6 +2935,9 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       "icon-512.png",
       "zugspitze_reintal_corrected_route.gpx",
       "zugspitze_reintal_corrected_map.kml",
+      "zugspitze_organic_maps_import.kmz",
+      "zugspitze_organic_maps_import.kml",
+      "ORGANIC_MAPS_IMPORT.txt",
       "zugspitze_descent_options.gpx",
       "zugspitze_descent_options.kml",
       "zugspitze_reintal_editable_points.json",
@@ -3610,7 +3747,7 @@ def write_print_html(descent_options):
       <ul>
 {html_source_links(SAFETY_LINKS)}
       </ul>
-      <p class="small">Файли резерву: zugspitze_reintal_corrected_route.gpx, zugspitze_descent_options.gpx, zugspitze_descent_options.kml.</p>
+      <p class="small">Файли резерву: zugspitze_organic_maps_import.kmz, zugspitze_reintal_corrected_route.gpx, zugspitze_descent_options.gpx, zugspitze_descent_options.kml.</p>
     </section>
   </main>
 </body>
@@ -3637,13 +3774,16 @@ def write_offline_readme():
 - zugspitze_descent_options.gpx - варіанти спусків.
 - zugspitze_descent_options.kml - спуски для KML.
 - zugspitze_reintal_corrected_map.kml - основний маршрут для KML.
+- zugspitze_organic_maps_import.kmz - один файл для імпорту в Organic Maps.
+- ORGANIC_MAPS_IMPORT.txt - коротка інструкція для Organic Maps.
 
 iPhone:
 - Не використовувати Files/ZIP як основний спосіб для інтерактивної карти: iOS може відкрити HTML як preview, де JS/GPS не працюють.
 - Найкраще: відкрити GitHub Pages у Safari, Share -> Add to Home Screen.
 - Відкрити іконку з Home Screen і натиснути "Зберегти web-app офлайн" у вкладці Офлайн.
 - ZIP тримати як резерв для GPX/print.html або для ПК.
-- GPX окремо імпортувати в Organic Maps / Mapy.cz / Garmin.
+- Найкраще для Organic Maps: імпортувати zugspitze_organic_maps_import.kmz.
+- GPX окремо імпортувати в Organic Maps / Mapy.cz / Garmin як додатковий резерв.
 
 Публічна карта:
 {PUBLIC_MAP_URL}
@@ -3660,6 +3800,9 @@ def write_offline_zip():
         OUT_KML,
         OUT_DESCENT_GPX,
         OUT_DESCENT_KML,
+        OUT_ORGANIC_KML,
+        OUT_ORGANIC_KMZ,
+        OUT_ORGANIC_README,
         OUT_JSON,
         OUT_OFFLINE_README,
         OUT_MANIFEST,
@@ -3782,6 +3925,9 @@ def write_pwa_files():
         "apple-startup-1290x2796.png",
         "zugspitze_reintal_corrected_route.gpx",
         "zugspitze_reintal_corrected_map.kml",
+        "zugspitze_organic_maps_import.kmz",
+        "zugspitze_organic_maps_import.kml",
+        "ORGANIC_MAPS_IMPORT.txt",
         "zugspitze_descent_options.gpx",
         "zugspitze_descent_options.kml",
         "zugspitze_reintal_editable_points.json",
@@ -3855,6 +4001,7 @@ def main():
     write_kml(segments, closed_points, detour_check_points)
     write_descent_gpx(descent_options)
     write_descent_kml(descent_options)
+    write_organic_maps_import(corrected_points, segments, closed_points, detour_check_points, descent_options)
     write_html(original_points, corrected_points, segments, detour_points, detour_check_points, closed_points, used_way_summary, descent_options)
     write_print_html(descent_options)
     write_offline_readme()
@@ -3872,6 +4019,8 @@ def main():
     print(f"Wrote {OUT_KML.name}")
     print(f"Wrote {OUT_DESCENT_GPX.name}")
     print(f"Wrote {OUT_DESCENT_KML.name}")
+    print(f"Wrote {OUT_ORGANIC_KMZ.name}")
+    print(f"Wrote {OUT_ORGANIC_KML.name}")
     print(f"Detour: {len(detour_points)} points, {polyline_distance(detour_points) / 1000:.2f} km")
     print(f"Corrected route: {len(corrected_points)} points, {polyline_distance(corrected_points) / 1000:.2f} km")
 

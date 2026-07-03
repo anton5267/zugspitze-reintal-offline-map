@@ -15,13 +15,16 @@ Zugspitze Reintal offline pack
 - zugspitze_descent_options.gpx - варіанти спусків.
 - zugspitze_descent_options.kml - спуски для KML.
 - zugspitze_reintal_corrected_map.kml - основний маршрут для KML.
+- zugspitze_organic_maps_import.kmz - один файл для імпорту в Organic Maps.
+- ORGANIC_MAPS_IMPORT.txt - коротка інструкція для Organic Maps.
 
 iPhone:
 - Не використовувати Files/ZIP як основний спосіб для інтерактивної карти: iOS може відкрити HTML як preview, де JS/GPS не працюють.
 - Найкраще: відкрити GitHub Pages у Safari, Share -> Add to Home Screen.
 - Відкрити іконку з Home Screen і натиснути "Зберегти web-app офлайн" у вкладці Офлайн.
 - ZIP тримати як резерв для GPX/print.html або для ПК.
-- GPX окремо імпортувати в Organic Maps / Mapy.cz / Garmin.
+- Найкраще для Organic Maps: імпортувати zugspitze_organic_maps_import.kmz.
+- GPX окремо імпортувати в Organic Maps / Mapy.cz / Garmin як додатковий резерв.
 
 Публічна карта:
 https://anton5267.github.io/zugspitze-reintal-offline-map/
