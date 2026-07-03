@@ -25,6 +25,8 @@ OUT_MANIFEST = ROOT / "manifest.webmanifest"
 OUT_SERVICE_WORKER = ROOT / "service-worker.js"
 OUT_ICON_192 = ROOT / "icon-192.png"
 OUT_ICON_512 = ROOT / "icon-512.png"
+OUT_STARTUP_1179 = ROOT / "apple-startup-1179x2556.png"
+OUT_STARTUP_1290 = ROOT / "apple-startup-1290x2796.png"
 OUT_JSON = ROOT / "zugspitze_reintal_editable_points.json"
 OUT_GPX = ROOT / "zugspitze_reintal_corrected_route.gpx"
 OUT_KML = ROOT / "zugspitze_reintal_corrected_map.kml"
@@ -2311,6 +2313,8 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="apple-touch-startup-image" href="apple-startup-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="apple-startup-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
   <style>
 {leaflet_css}
   </style>
@@ -2410,6 +2414,9 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     .decision-box li {{ margin: 3px 0; }}
     .pwa-box {{ border-left: 4px solid #1d4ed8; background: #eff6ff; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }}
     .pwa-status {{ margin-top: 6px; font-weight: 700; color: #1e3a8a; }}
+    body.standalone-app .panel-top {{ display: none; }}
+    body.standalone-app .offline-status {{ top: calc(var(--safe-top) + 8px); }}
+    body.standalone-app .pwa-status {{ color: #166534; }}
     .offline-status {{
       position: fixed; z-index: 900; top: 10px; left: 50%; right: auto; transform: translateX(-50%);
       max-width: min(430px, calc(100vw - 560px));
@@ -2681,7 +2688,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       <p><b>Супутник тільки онлайн.</b> Якщо немає мережі, просто лишай шар “Офлайн OSM-вектор”.</p>
       <p>Для реального походу також завантажити GPX у навігатор: Organic Maps, Mapy.cz, Garmin або інший застосунок. На iPhone не розраховувати, що Safari сам надійно збереже сайт офлайн.</p>
       <div class="pwa-box">
-        <b>Найкраще для iPhone:</b> відкрити цю GitHub Pages-сторінку в Safari, Share → Add to Home Screen, потім відкрити іконку з Home Screen. Files/ZIP на iPhone часто відкриває HTML як preview, де кнопки не працюють.
+        <b>Найкраще для iPhone:</b> відкрити цю GitHub Pages-сторінку в Safari, Share → Add to Home Screen, потім запускати саме іконку з Home Screen. Тоді відкривається як приложуха без Safari-рамки. Files/ZIP на iPhone часто відкриває HTML як preview, де кнопки не працюють.
         <div id="pwaStatus" class="pwa-status">Офлайн web-app: перевіряється...</div>
         <button id="cacheOfflineApp" class="small-btn" type="button">Зберегти web-app офлайн</button>
       </div>
@@ -2786,6 +2793,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     const pwaAssets = [
       "./",
       "index.html",
+      "index.html?app=1",
       "print.html",
       "manifest.webmanifest",
       "service-worker.js",
@@ -3043,6 +3051,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     const offlineStatus = document.getElementById("offlineStatus");
     const pwaStatus = document.getElementById("pwaStatus");
     const cacheOfflineAppButton = document.getElementById("cacheOfflineApp");
+    const isStandaloneApp = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true || new URLSearchParams(window.location.search).get("app") === "1";
     let locationWatchId = null;
     let locationMarker = null;
     let locationAccuracyCircle = null;
@@ -3050,6 +3059,11 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
     function hideRouteNotice() {{
       routeNotice.style.display = "none";
       document.body.classList.add("notice-hidden");
+    }}
+
+    if (isStandaloneApp) {{
+      document.body.classList.add("standalone-app");
+      hideRouteNotice();
     }}
 
     function activeInfoTabKey() {{
@@ -3230,7 +3244,7 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       document.body.classList.toggle("is-offline", offline);
       offlineStatus.textContent = offline
         ? "Офлайн режим: маршрути і POI працюють; супутник недоступний"
-        : `Офлайн готово · перевірено ${{sourceCheckDate}} · супутник онлайн за потреби`;
+        : `${{isStandaloneApp ? "App mode · " : ""}}Офлайн готово · перевірено ${{sourceCheckDate}} · супутник онлайн за потреби`;
     }}
 
     window.addEventListener("online", updateOnlineStatus);
@@ -3250,10 +3264,12 @@ def write_html(original_points, corrected_points, segments, detour_points, detou
       const cachedIndex = await cache.match("index.html");
       const cachedPrint = await cache.match("print.html");
       if (cachedIndex && cachedPrint) {{
-        updatePwaStatus("Офлайн web-app готовий: карта і аварійний лист у кеші.");
+        updatePwaStatus(isStandaloneApp
+          ? "Відкрито як приложуха. Офлайн-кеш готовий."
+          : "Офлайн web-app готовий: карта і аварійний лист у кеші. Для вигляду приложухи відкрий з Home Screen.");
         return true;
       }}
-      updatePwaStatus("Офлайн web-app ще не збережений. Натисни кнопку нижче онлайн.");
+      updatePwaStatus("Офлайн web-app ще не збережений. Натисни кнопку нижче онлайн, потім Add to Home Screen.");
       return false;
     }}
 
@@ -3650,6 +3666,8 @@ def write_offline_zip():
         OUT_SERVICE_WORKER,
         OUT_ICON_192,
         OUT_ICON_512,
+        OUT_STARTUP_1179,
+        OUT_STARTUP_1290,
     ]
     with zipfile.ZipFile(OUT_OFFLINE_ZIP, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for file_path in files:
@@ -3698,13 +3716,47 @@ def write_pwa_icons():
         draw.text((size * 0.26, size * 0.24), "Z", fill="#111827", font=font)
         image.save(output)
 
+    for width, height, output in ((1179, 2556, OUT_STARTUP_1179), (1290, 2796, OUT_STARTUP_1290)):
+        image = Image.new("RGB", (width, height), "#0f172a")
+        draw = ImageDraw.Draw(image)
+        draw.rectangle([0, int(height * 0.58), width, height], fill="#111827")
+        draw.line(
+            [
+                (int(width * 0.16), int(height * 0.58)),
+                (int(width * 0.30), int(height * 0.48)),
+                (int(width * 0.43), int(height * 0.54)),
+                (int(width * 0.61), int(height * 0.34)),
+                (int(width * 0.83), int(height * 0.52)),
+            ],
+            fill="#22c55e",
+            width=max(18, width // 32),
+            joint="curve",
+        )
+        draw.ellipse(
+            [int(width * 0.62), int(height * 0.23), int(width * 0.78), int(height * 0.31)],
+            fill="#f59e0b",
+            outline="#fef3c7",
+            width=max(6, width // 120),
+        )
+        try:
+            title_font = ImageFont.truetype("arial.ttf", width // 10)
+            sub_font = ImageFont.truetype("arial.ttf", width // 24)
+        except Exception:
+            title_font = ImageFont.load_default()
+            sub_font = ImageFont.load_default()
+        draw.text((int(width * 0.13), int(height * 0.66)), "Zugspitze", fill="#f8fafc", font=title_font)
+        draw.text((int(width * 0.13), int(height * 0.73)), "Reintal offline map", fill="#bfdbfe", font=sub_font)
+        draw.text((int(width * 0.13), int(height * 0.78)), "Маршрут · GPS · SOS · GPX", fill="#cbd5e1", font=sub_font)
+        image.save(output)
+
 
 def write_pwa_files():
     manifest = {
         "name": "Zugspitze Reintal Offline Map",
         "short_name": "Zugspitze",
         "description": "Offline hiking map for Zugspitze via Reintal with POI, descents, SOS and GPX/KML.",
-        "start_url": "./index.html",
+        "id": "./index.html",
+        "start_url": "./index.html?app=1",
         "scope": "./",
         "display": "standalone",
         "orientation": "any",
@@ -3720,11 +3772,14 @@ def write_pwa_files():
     assets = [
         "./",
         "index.html",
+        "index.html?app=1",
         "print.html",
         "manifest.webmanifest",
         "service-worker.js",
         "icon-192.png",
         "icon-512.png",
+        "apple-startup-1179x2556.png",
+        "apple-startup-1290x2796.png",
         "zugspitze_reintal_corrected_route.gpx",
         "zugspitze_reintal_corrected_map.kml",
         "zugspitze_descent_options.gpx",

@@ -14,7 +14,7 @@ Notes:
 - Closed or technical descent routes are marked as "НЕ планувати" in the map.
 - `print.html` is an A4 emergency sheet with QR, SOS, key coordinates, decision points, and official pre-departure links.
 - The interactive map includes GPS locate, a pre-departure checklist, and a Sonnalpin decision panel.
-- Best iPhone mode: open GitHub Pages in Safari, use Share -> Add to Home Screen, then cache the web app from the `Офлайн` tab.
+- Best iPhone mode: open GitHub Pages in Safari, use Share -> Add to Home Screen, then launch the Home Screen icon. It opens standalone like an app, without the Safari browser frame.
 - ZIP/file mode is mainly a backup for GPX, `print.html`, or desktop browsers. iPhone Files may open HTML as a preview where JS/GPS does not work.
 
 Main files:

@@ -10,6 +10,8 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="apple-touch-startup-image" href="apple-startup-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+  <link rel="apple-touch-startup-image" href="apple-startup-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
   <style>
 /* required styles */
 
@@ -1431,6 +1433,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
     .decision-box li { margin: 3px 0; }
     .pwa-box { border-left: 4px solid #1d4ed8; background: #eff6ff; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
     .pwa-status { margin-top: 6px; font-weight: 700; color: #1e3a8a; }
+    body.standalone-app .panel-top { display: none; }
+    body.standalone-app .offline-status { top: calc(var(--safe-top) + 8px); }
+    body.standalone-app .pwa-status { color: #166534; }
     .offline-status {
       position: fixed; z-index: 900; top: 10px; left: 50%; right: auto; transform: translateX(-50%);
       max-width: min(430px, calc(100vw - 560px));
@@ -1716,7 +1721,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <p><b>Супутник тільки онлайн.</b> Якщо немає мережі, просто лишай шар “Офлайн OSM-вектор”.</p>
       <p>Для реального походу також завантажити GPX у навігатор: Organic Maps, Mapy.cz, Garmin або інший застосунок. На iPhone не розраховувати, що Safari сам надійно збереже сайт офлайн.</p>
       <div class="pwa-box">
-        <b>Найкраще для iPhone:</b> відкрити цю GitHub Pages-сторінку в Safari, Share → Add to Home Screen, потім відкрити іконку з Home Screen. Files/ZIP на iPhone часто відкриває HTML як preview, де кнопки не працюють.
+        <b>Найкраще для iPhone:</b> відкрити цю GitHub Pages-сторінку в Safari, Share → Add to Home Screen, потім запускати саме іконку з Home Screen. Тоді відкривається як приложуха без Safari-рамки. Files/ZIP на iPhone часто відкриває HTML як preview, де кнопки не працюють.
         <div id="pwaStatus" class="pwa-status">Офлайн web-app: перевіряється...</div>
         <button id="cacheOfflineApp" class="small-btn" type="button">Зберегти web-app офлайн</button>
       </div>
@@ -1840,6 +1845,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const pwaAssets = [
       "./",
       "index.html",
+      "index.html?app=1",
       "print.html",
       "manifest.webmanifest",
       "service-worker.js",
@@ -2097,6 +2103,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     const offlineStatus = document.getElementById("offlineStatus");
     const pwaStatus = document.getElementById("pwaStatus");
     const cacheOfflineAppButton = document.getElementById("cacheOfflineApp");
+    const isStandaloneApp = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true || new URLSearchParams(window.location.search).get("app") === "1";
     let locationWatchId = null;
     let locationMarker = null;
     let locationAccuracyCircle = null;
@@ -2104,6 +2111,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
     function hideRouteNotice() {
       routeNotice.style.display = "none";
       document.body.classList.add("notice-hidden");
+    }
+
+    if (isStandaloneApp) {
+      document.body.classList.add("standalone-app");
+      hideRouteNotice();
     }
 
     function activeInfoTabKey() {
@@ -2284,7 +2296,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       document.body.classList.toggle("is-offline", offline);
       offlineStatus.textContent = offline
         ? "Офлайн режим: маршрути і POI працюють; супутник недоступний"
-        : `Офлайн готово · перевірено ${sourceCheckDate} · супутник онлайн за потреби`;
+        : `${isStandaloneApp ? "App mode · " : ""}Офлайн готово · перевірено ${sourceCheckDate} · супутник онлайн за потреби`;
     }
 
     window.addEventListener("online", updateOnlineStatus);
@@ -2304,10 +2316,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
       const cachedIndex = await cache.match("index.html");
       const cachedPrint = await cache.match("print.html");
       if (cachedIndex && cachedPrint) {
-        updatePwaStatus("Офлайн web-app готовий: карта і аварійний лист у кеші.");
+        updatePwaStatus(isStandaloneApp
+          ? "Відкрито як приложуха. Офлайн-кеш готовий."
+          : "Офлайн web-app готовий: карта і аварійний лист у кеші. Для вигляду приложухи відкрий з Home Screen.");
         return true;
       }
-      updatePwaStatus("Офлайн web-app ще не збережений. Натисни кнопку нижче онлайн.");
+      updatePwaStatus("Офлайн web-app ще не збережений. Натисни кнопку нижче онлайн, потім Add to Home Screen.");
       return false;
     }
 
