@@ -16,11 +16,11 @@ Notes:
 - The interactive map includes GPS locate, a pre-departure checklist, and a Sonnalpin decision panel.
 - Best iPhone mode: open GitHub Pages in Safari, use Share -> Add to Home Screen, then launch the Home Screen icon. It opens standalone like an app, without the Safari browser frame.
 - ZIP/file mode is mainly a backup for GPX, `print.html`, or desktop browsers. iPhone Files may open HTML as a preview where JS/GPS does not work.
+- This public repository is a cleaned release package: generated development inputs, OSM caches, and local test artifacts are intentionally not included.
 
 Main files:
 
 - `index.html` - GitHub Pages entry point.
-- `zugspitze_reintal_editable_map.html` - same standalone map file.
 - `zugspitze_reintal_corrected_route.gpx` - main corrected route.
 - `zugspitze_descent_options.gpx` - descent options.
 - `zugspitze_descent_options.kml` - descent options for KML tools.
@@ -29,4 +29,3 @@ Main files:
 - `print.html` - printable emergency sheet.
 - `zugspitze_offline_pack.zip` - offline pack with map, print sheet, GPX/KML, and local instructions.
 - `manifest.webmanifest` / `service-worker.js` - PWA offline cache for GitHub Pages / iPhone Home Screen.
-- `build_zugspitze_editable_map.py` - generator.

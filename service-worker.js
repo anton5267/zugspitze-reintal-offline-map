@@ -1,4 +1,4 @@
-const CACHE_NAME = "zugspitze-pwa-20260703-2";
+const CACHE_NAME = "zugspitze-pwa-20260712-clean";
 const ASSETS = [
   "./",
   "index.html",
